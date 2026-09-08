@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yena Event — Agence évènementielle</title>
+<meta name="description" content="Yena Event, votre agence évènementielle pour mariages, anniversaires, baptêmes, séminaires et galas. Demandez votre devis et validez votre prestation en ligne.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎉</text></svg>">
+</head>
+<body>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<header class="site-header" id="siteHeader">
+  <div class="container header-inner">
+    <a href="#accueil" class="logo">
+      <span class="logo-mark">YE</span>
+      <span class="logo-text">Yena <em>Event</em></span>
+    </a>
+    <nav class="main-nav" id="mainNav">
+      <a href="#accueil">Accueil</a>
+      <a href="#apropos">À propos</a>
+      <a href="#prestations">Prestations</a>
+      <a href="#process">Déroulement</a>
+      <a href="#galerie">Galerie</a>
+      <a href="#avis">Avis</a>
+      <a href="#faq">FAQ</a>
+      <a href="#contact">Contact</a>
+    </nav>
+    <div class="header-actions">
+      <a href="tel:+33600000000" class="header-phone">📞 +33 6 00 00 00 00</a>
+      <a href="#reservation" class="btn btn-primary">Valider une prestation</a>
+      <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- HERO -->
+  <section id="accueil" class="hero">
+    <div class="hero-bg" aria-hidden="true"></div>
+    <div class="container hero-inner">
+      <p class="reveal eyebrow">Agence évènementielle — Mariages · Anniversaires · Séminaires · Galas</p>
+      <h1 class="reveal">Des évènements pensés dans le moindre détail, <em>vécus pleinement</em></h1>
+      <p class="reveal hero-sub">Yena Event conçoit et orchestre vos évènements privés et professionnels, de la première idée jusqu'au jour J. Un interlocuteur unique, un devis clair, une prestation validée en quelques clics.</p>
+      <div class="reveal hero-cta">
+        <a href="#reservation" class="btn btn-primary btn-lg">Demander un devis</a>
+        <a href="#prestations" class="btn btn-ghost btn-lg">Découvrir nos prestations</a>
+      </div>
+      <div class="reveal hero-stats" id="heroStats">
+        <div class="stat"><span class="stat-num" data-target="250">0</span><span class="stat-label">évènements organisés</span></div>
+        <div class="stat"><span class="stat-num" data-target="98">0</span><span class="stat-label">% clients satisfaits</span></div>
+        <div class="stat"><span class="stat-num" data-target="9">0</span><span class="stat-label">ans d'expérience</span></div>
+        <div class="stat"><span class="stat-num" data-target="40">0</span><span class="stat-label">partenaires de confiance</span></div>
+      </div>
+    </div>
+    <a href="#apropos" class="scroll-cue" aria-label="Défiler">↓</a>
+  </section>
+
+  <!-- APROPOS -->
+  <section id="apropos" class="section">
+    <div class="container about-grid">
+      <div class="about-visual reveal">
+        <div class="about-frame">
+          <div class="about-swatch"></div>
+          <div class="about-badge">
+            <strong>9 ans</strong>
+            <span>au service de vos évènements</span>
+          </div>
+        </div>
+      </div>
+      <div class="about-content reveal">
+        <p class="eyebrow">Qui sommes-nous</p>
+        <h2>L'art de recevoir, sans le stress de l'organisation</h2>
+        <p>Depuis 2017, Yena Event accompagne particuliers et entreprises dans la création d'évènements sur mesure. Mariages, anniversaires, baptêmes, séminaires d'entreprise ou galas : notre équipe prend en charge la scénographie, la logistique, les prestataires et le déroulé du jour J.</p>
+        <p>Notre promesse : un accompagnement personnalisé, une transparence totale sur le budget, et une validation simple et rapide de votre prestation en ligne.</p>
+        <ul class="check-list">
+          <li>Interlocuteur dédié du premier rendez-vous au jour J</li>
+          <li>Devis détaillé et sans frais cachés</li>
+          <li>Réseau de prestataires sélectionnés (traiteurs, lieux, DJ, décoration…)</li>
+          <li>Suivi et coordination le jour de l'évènement</li>
+        </ul>
+        <a href="#contact" class="btn btn-outline">Nous contacter</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRESTATIONS -->
+  <section id="prestations" class="section section-alt">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">Nos prestations</p>
+        <h2>Une expertise pour chaque occasion</h2>
+        <p class="section-sub">Sélectionnez une prestation pour l'ajouter directement à votre demande de réservation.</p>
+      </div>
+      <div class="services-grid" id="servicesGrid">
+        <!-- injected by JS -->
+      </div>
+    </div>
+  </section>
+
+  <!-- PROCESS -->
+  <section id="process" class="section">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">Comment ça marche</p>
+        <h2>De votre demande à votre évènement, en 4 étapes</h2>
+      </div>
+      <div class="process-grid">
+        <div class="process-step reveal">
+          <span class="process-num">01</span>
+          <h3>Vous nous contactez</h3>
+          <p>Remplissez le formulaire de réservation en ligne avec vos envies, votre date et votre budget.</p>
+        </div>
+        <div class="process-step reveal">
+          <span class="process-num">02</span>
+          <h3>Devis personnalisé</h3>
+          <p>Notre équipe revient vers vous sous 48h avec une proposition détaillée et adaptée.</p>
+        </div>
+        <div class="process-step reveal">
+          <span class="process-num">03</span>
+          <h3>Vous validez la prestation</h3>
+          <p>Confirmation en ligne, acompte et planning établis ensemble, en toute transparence.</p>
+        </div>
+        <div class="process-step reveal">
+          <span class="process-num">04</span>
+          <h3>Le jour J</h3>
+          <p>Nous coordonnons chaque détail sur place pour que vous profitiez pleinement de l'instant.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- GALERIE -->
+  <section id="galerie" class="section section-alt">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">Inspirations</p>
+        <h2>Un aperçu de nos réalisations</h2>
+      </div>
+      <div class="gallery-grid" id="galleryGrid"></div>
+    </div>
+  </section>
+
+  <!-- AVIS -->
+  <section id="avis" class="section">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">Témoignages</p>
+        <h2>Ils ont fait confiance à Yena Event</h2>
+      </div>
+      <div class="testimonial-slider reveal">
+        <div class="testimonial-track" id="testimonialTrack"></div>
+        <div class="testimonial-dots" id="testimonialDots"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RESERVATION -->
+  <section id="reservation" class="section section-dark">
+    <div class="container">
+      <div class="section-head reveal light">
+        <p class="eyebrow">Réservation en ligne</p>
+        <h2>Validez votre prestation en quelques étapes</h2>
+        <p class="section-sub">Aucun engagement immédiat : vous recevez un devis avant toute validation définitive.</p>
+      </div>
+
+      <div class="booking-card reveal">
+        <div class="booking-progress">
+          <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+          <ol class="progress-steps" id="progressSteps">
+            <li data-step="1" class="active">Prestation</li>
+            <li data-step="2">Détails</li>
+            <li data-step="3">Coordonnées</li>
+            <li data-step="4">Récapitulatif</li>
+          </ol>
+        </div>
+
+        <form id="bookingForm" novalidate>
+          <!-- STEP 1 -->
+          <fieldset class="form-step active" data-step="1">
+            <legend>Quelle prestation souhaitez-vous ?</legend>
+            <div class="option-grid" id="serviceOptions"></div>
+            <p class="field-error" id="err-service"></p>
+          </fieldset>
+
+          <!-- STEP 2 -->
+          <fieldset class="form-step" data-step="2">
+            <legend>Détails de votre évènement</legend>
+            <div class="form-grid">
+              <div class="field">
+                <label for="eventDate">Date souhaitée *</label>
+                <input type="date" id="eventDate" name="eventDate" required>
+                <p class="field-error" id="err-eventDate"></p>
+              </div>
+              <div class="field">
+                <label for="guests">Nombre d'invités *</label>
+                <input type="number" id="guests" name="guests" min="1" max="2000" placeholder="Ex : 80" required>
+                <p class="field-error" id="err-guests"></p>
+              </div>
+              <div class="field">
+                <label for="location">Lieu envisagé</label>
+                <input type="text" id="location" name="location" placeholder="Ville, salle, ou à définir">
+              </div>
+              <div class="field">
+                <label for="budget">Budget estimé</label>
+                <select id="budget" name="budget">
+                  <option value="">Sélectionner…</option>
+                  <option value="< 3 000 €">Moins de 3 000 €</option>
+                  <option value="3 000 - 8 000 €">3 000 € - 8 000 €</option>
+                  <option value="8 000 - 15 000 €">8 000 € - 15 000 €</option>
+                  <option value="15 000 - 30 000 €">15 000 € - 30 000 €</option>
+                  <option value="> 30 000 €">Plus de 30 000 €</option>
+                </select>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- STEP 3 -->
+          <fieldset class="form-step" data-step="3">
+            <legend>Vos coordonnées</legend>
+            <div class="form-grid">
+              <div class="field">
+                <label for="fullName">Nom complet *</label>
+                <input type="text" id="fullName" name="fullName" placeholder="Prénom Nom" required>
+                <p class="field-error" id="err-fullName"></p>
+              </div>
+              <div class="field">
+                <label for="email">Email *</label>
+                <input type="email" id="email" name="email" placeholder="vous@exemple.com" required>
+                <p class="field-error" id="err-email"></p>
+              </div>
+              <div class="field">
+                <label for="phone">Téléphone *</label>
+                <input type="tel" id="phone" name="phone" placeholder="06 00 00 00 00" required>
+                <p class="field-error" id="err-phone"></p>
+              </div>
+              <div class="field field-full">
+                <label for="message">Message (optionnel)</label>
+                <textarea id="message" name="message" rows="3" placeholder="Précisez vos envies, thème, contraintes particulières…"></textarea>
+              </div>
+            </div>
+          </fieldset>
+
+          <!-- STEP 4 -->
+          <fieldset class="form-step" data-step="4">
+            <legend>Récapitulatif de votre demande</legend>
+            <div class="summary-box" id="summaryBox"></div>
+            <label class="consent">
+              <input type="checkbox" id="consent" name="consent" required>
+              J'accepte d'être recontacté(e) par Yena Event au sujet de ma demande. *
+            </label>
+            <p class="field-error" id="err-consent"></p>
+          </fieldset>
+
+          <div class="form-nav">
+            <button type="button" class="btn btn-outline" id="prevBtn" disabled>← Précédent</button>
+            <button type="button" class="btn btn-primary" id="nextBtn">Suivant →</button>
+            <button type="submit" class="btn btn-primary btn-confirm" id="submitBtn" hidden>✓ Valider la prestation</button>
+          </div>
+        </form>
+
+        <div class="booking-success" id="bookingSuccess" hidden>
+          <div class="success-icon">✓</div>
+          <h3>Votre demande a bien été envoyée !</h3>
+          <p>Référence de votre demande : <strong id="refNumber"></strong></p>
+          <p>Notre équipe revient vers vous sous 48h à l'adresse indiquée pour finaliser votre devis et confirmer la prestation.</p>
+          <div class="success-actions">
+            <a href="#" id="mailtoRecap" class="btn btn-outline">Recevoir le récapitulatif par email</a>
+            <button type="button" class="btn btn-primary" id="newRequestBtn">Faire une nouvelle demande</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section id="faq" class="section">
+    <div class="container faq-wrap">
+      <div class="section-head reveal">
+        <p class="eyebrow">Questions fréquentes</p>
+        <h2>Tout ce qu'il faut savoir</h2>
+      </div>
+      <div class="accordion reveal" id="accordion"></div>
+    </div>
+  </section>
+
+  <!-- CONTACT -->
+  <section id="contact" class="section section-alt">
+    <div class="container contact-grid">
+      <div class="contact-info reveal">
+        <p class="eyebrow">Contact</p>
+        <h2>Parlons de votre évènement</h2>
+        <p class="section-sub">Une question avant de vous lancer ? Notre équipe est disponible du lundi au samedi.</p>
+        <ul class="contact-list">
+          <li>📍 12 rue des Fêtes, 75000 Paris</li>
+          <li>📞 <a href="tel:+33600000000">+33 6 00 00 00 00</a></li>
+          <li>✉️ <a href="mailto:contact@yena-event.fr">contact@yena-event.fr</a></li>
+          <li>🕐 Lun–Sam, 9h–19h</li>
+        </ul>
+        <div class="social-row">
+          <a href="#" aria-label="Instagram">Instagram</a>
+          <a href="#" aria-label="Facebook">Facebook</a>
+          <a href="#" aria-label="Pinterest">Pinterest</a>
+        </div>
+      </div>
+      <form class="contact-form reveal" id="contactForm">
+        <div class="field">
+          <label for="cName">Nom *</label>
+          <input type="text" id="cName" required>
+        </div>
+        <div class="field">
+          <label for="cEmail">Email *</label>
+          <input type="email" id="cEmail" required>
+        </div>
+        <div class="field">
+          <label for="cMsg">Message *</label>
+          <textarea id="cMsg" rows="4" required></textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">Envoyer le message</button>
+      </form>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div>
+      <a href="#accueil" class="logo footer-logo">
+        <span class="logo-mark">YE</span>
+        <span class="logo-text">Yena <em>Event</em></span>
+      </a>
+      <p>Votre agence évènementielle pour des instants inoubliables.</p>
+    </div>
+    <div>
+      <h4>Navigation</h4>
+      <a href="#prestations">Prestations</a>
+      <a href="#galerie">Galerie</a>
+      <a href="#avis">Avis clients</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <div>
+      <h4>Prestations</h4>
+      <a href="#reservation">Mariages</a>
+      <a href="#reservation">Anniversaires</a>
+      <a href="#reservation">Séminaires</a>
+      <a href="#reservation">Galas</a>
+    </div>
+    <div>
+      <h4>Newsletter</h4>
+      <p>Recevez nos inspirations évènementielles.</p>
+      <form class="newsletter-form" id="newsletterForm">
+        <input type="email" placeholder="Votre email" required>
+        <button type="submit">OK</button>
+      </form>
+    </div>
+  </div>
+  <div class="container footer-bottom">
+    <p>© <span id="year"></span> Yena Event. Tous droits réservés.</p>
+  </div>
+</footer>
+
+<button id="backToTop" class="back-to-top" aria-label="Retour en haut">↑</button>
+
+<script src="js/script.js"></script>
+</body>
+</html>
