@@ -319,7 +319,7 @@ let lastBooking = null;
 function pad2_(n) { return String(n).padStart(2, '0'); }
 
 function buildGoogleCalendarUrl_(booking) {
-  const d = new Date(booking.date + 'T00:00:00');
+  const d = new Date(booking.eventDate + 'T00:00:00');
   const end = new Date(d.getTime() + 86400000);
   const fmt = (dt) => `${dt.getFullYear()}${pad2_(dt.getMonth() + 1)}${pad2_(dt.getDate())}`;
   const params = new URLSearchParams({
@@ -333,8 +333,8 @@ function buildGoogleCalendarUrl_(booking) {
 }
 
 function buildIcsContent_(booking) {
-  const d = booking.date.replace(/-/g, '');
-  const end = new Date(new Date(booking.date + 'T00:00:00').getTime() + 86400000);
+  const d = booking.eventDate.replace(/-/g, '');
+  const end = new Date(new Date(booking.eventDate + 'T00:00:00').getTime() + 86400000);
   const endStr = `${end.getFullYear()}${pad2_(end.getMonth() + 1)}${pad2_(end.getDate())}`;
   const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
   const esc = (s) => String(s || '').replace(/[\\;,]/g, m => '\\' + m).replace(/\n/g, '\\n');
@@ -375,7 +375,7 @@ bookingForm.addEventListener('submit', async (e) => {
   const booking = {
     ref,
     service: service ? service.title : '',
-    date: document.getElementById('eventDate').value,
+    eventDate: document.getElementById('eventDate').value,
     guests: document.getElementById('guests').value,
     location: document.getElementById('location').value,
     budget: document.getElementById('budget').value,
@@ -397,7 +397,7 @@ bookingForm.addEventListener('submit', async (e) => {
     localStorage.setItem('yena_bookings', JSON.stringify(existing));
   } catch (err) { /* localStorage indisponible : on continue sans bloquer */ }
 
-  await sendToBackend_(booking);
+  const backendResult = await sendToBackend_(booking);
 
   submitBtn.disabled = false;
   submitBtn.innerHTML = originalLabel;
@@ -407,16 +407,22 @@ bookingForm.addEventListener('submit', async (e) => {
   document.querySelector('.booking-progress').hidden = true;
   document.getElementById('bookingSuccess').hidden = false;
 
-  const subject = encodeURIComponent(`Récapitulatif demande ${ref} — Yena Event`);
-  const body = encodeURIComponent(
-    `Bonjour,\n\nVoici le récapitulatif de votre demande :\n\n` +
-    `Référence : ${ref}\nPrestation : ${booking.service}\nDate : ${booking.date}\n` +
-    `Invités : ${booking.guests}\nLieu : ${booking.location || '—'}\nBudget : ${booking.budget || '—'}\n` +
-    `Contact : ${booking.fullName} — ${booking.email} — ${booking.phone}\n\n` +
-    `Vous pourrez retrouver vos photos après l'évènement dans la section "Mes photos" du site, avec cette référence et votre email.\n\n` +
-    `Merci de votre confiance,\nYena Event`
-  );
-  document.getElementById('mailtoRecap').href = `mailto:${booking.email}?subject=${subject}&body=${body}`;
+  const backendOk = backendResult && backendResult.ok;
+  document.getElementById('mailtoRecap').hidden = backendOk;
+  document.getElementById('emailNote').hidden = !backendOk;
+
+  if (!backendOk) {
+    const subject = encodeURIComponent(`Récapitulatif demande ${ref} — Yena Event`);
+    const body = encodeURIComponent(
+      `Bonjour,\n\nVoici le récapitulatif de votre demande :\n\n` +
+      `Référence : ${ref}\nPrestation : ${booking.service}\nDate : ${booking.eventDate}\n` +
+      `Invités : ${booking.guests}\nLieu : ${booking.location || '—'}\nBudget : ${booking.budget || '—'}\n` +
+      `Contact : ${booking.fullName} — ${booking.email} — ${booking.phone}\n\n` +
+      `Vous pourrez retrouver vos photos après l'évènement dans la section "Mes photos" du site, avec cette référence et votre email.\n\n` +
+      `Merci de votre confiance,\nYena Event`
+    );
+    document.getElementById('mailtoRecap').href = `mailto:${booking.email}?subject=${subject}&body=${body}`;
+  }
 
   showToast('Votre demande a été envoyée avec succès !');
 });
@@ -463,11 +469,34 @@ document.getElementById('newRequestBtn').addEventListener('click', () => {
 
 renderStep();
 
-/* ====== Contact form (client-side only) ====== */
-document.getElementById('contactForm').addEventListener('submit', (e) => {
+/* ====== Contact form ====== */
+document.getElementById('contactForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  showToast('Merci ! Votre message a bien été envoyé.');
-  e.target.reset();
+  const submitBtnContact = e.target.querySelector('button[type="submit"]');
+  const originalLabel = submitBtnContact.innerHTML;
+  submitBtnContact.disabled = true;
+  submitBtnContact.innerHTML = '<span class="spinner"></span>Envoi…';
+
+  const payload = {
+    type: 'contact',
+    name: document.getElementById('cName').value,
+    email: document.getElementById('cEmail').value,
+    message: document.getElementById('cMsg').value,
+  };
+  const result = await sendToBackend_(payload);
+
+  submitBtnContact.disabled = false;
+  submitBtnContact.innerHTML = originalLabel;
+
+  if (result.ok) {
+    showToast('Merci ! Votre message a bien été envoyé.');
+    e.target.reset();
+  } else if (result.error === 'not_configured') {
+    showToast('Merci ! Votre message a bien été envoyé.');
+    e.target.reset();
+  } else {
+    showToast("Une erreur est survenue, réessayez ou appelez-nous directement.");
+  }
 });
 
 /* ====== Newsletter (client-side only) ====== */

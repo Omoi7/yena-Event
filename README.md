@@ -13,7 +13,8 @@ Site vitrine interactif pour l'agence évènementielle Yena Event (mariages, ann
 - **Formulaire de réservation en 4 étapes** permettant à un client de choisir une prestation, renseigner les détails de son évènement, ses coordonnées, puis **valider sa prestation en ligne** avec génération d'une référence de demande
 - **Ajout au calendrier en un clic** (Google Calendar + fichier .ics) dès la validation de la demande
 - **Espace « Mes photos »** : chaque client retrouve les photos de son évènement (référence + email) dans le dossier Google Drive dédié créé automatiquement pour son évènement
-- Formulaire de contact et newsletter
+- **Emails automatiques** : confirmation au client et notification à Yena à chaque réservation, message de contact envoyé directement par email, et **demande d'avis Google automatique** envoyée au client 2 jours après son évènement
+- Formulaire de contact (envoyé par email à Yena) et newsletter
 - Barre de progression de lecture, copie de référence en un clic, focus clavier accessible
 - Palette de marque : marron `#52311b` / beige `#e6d6bc`
 
@@ -41,69 +42,65 @@ js/script.js                  Interactivité (menu, réservation, Mes photos, an
 google-apps-script/Code.gs    Backend Calendar + Drive (voir ci-dessous)
 ```
 
-## Connexion à Google Calendar et Google Drive (Mes photos)
+## Automatisation : Calendar, Drive, emails et avis Google
 
-Le site reproduit le fonctionnement déjà utilisé par Yena Event : un dossier
-Drive par évènement (`AAAA-MM-JJ_Prénom_Prestation`, rangé dans le dossier
-« Événements ») dans lequel les photos sont déposées puis partagées au
-client. Le fichier [`google-apps-script/Code.gs`](google-apps-script/Code.gs)
-automatise ces deux étapes :
+Le site est relié à un backend Google Apps Script
+([`google-apps-script/Code.gs`](google-apps-script/Code.gs)), déjà déployé
+et connecté (`js/config.js`). Voici tout ce qui se passe **sans aucune
+action manuelle** :
 
-- **À la validation d'une réservation** : création automatique d'un évènement
-  dans l'agenda Google de Yena, et création automatique du dossier Drive du
-  client (dans le dossier « Événements » existant), enregistrés dans un
-  Google Sheet qui sert de tableau de suivi des réservations.
-- **Espace « Mes photos »** : le client saisit sa référence + son email ; le
-  site interroge le même backend et affiche le lien vers son dossier Drive
-  dès que Yena a déposé les photos et marqué le statut « Prêt » dans le
-  tableau.
+| Évènement | Ce qui se passe automatiquement |
+|---|---|
+| Un client valide une réservation | Évènement créé dans l'agenda Google de Yena · Dossier Drive client créé dans « Événements » (même convention `AAAA-MM-JJ_Prénom_Prestation` que Yena utilise déjà) · Ligne ajoutée au Google Sheet de suivi · **Email de confirmation envoyé au client** · **Email de notification envoyé à Yena** |
+| Un visiteur envoie le formulaire de contact | **Email envoyé directement à Yena**, avec réponse possible en direct au client (reply-to) |
+| 2 jours après la date d'un évènement | **Email automatique envoyé au client** pour lui demander de laisser un avis Google (lien vers [la fiche Yena Event](https://maps.app.goo.gl/5UB9AKGLjTxDrgbWA)) — envoyé une seule fois par réservation |
+| Yena dépose les photos et passe une ligne à `Prêt` (colonne « Statut photos » du Sheet) | Le client peut voir/ouvrir son dossier photo depuis l'espace « Mes photos » du site |
 
-### Installation (5 minutes, une seule fois)
+Concrètement, une fois cette automatisation en place, il n'y a plus qu'**une
+seule chose à faire manuellement** : déposer les photos dans le bon dossier
+Drive après l'évènement et passer son statut à `Prêt` dans le tableau — tout
+le reste (agenda, dossier, emails de confirmation, notification, demande
+d'avis) tourne tout seul.
+
+### Pourquoi une étape reste manuelle (et pourquoi ce n'est pas contournable)
+
+Un script qui envoie des emails ou modifie un agenda **sans supervision**
+doit être explicitement autorisé une fois par un humain — c'est une mesure
+de sécurité de Google contre les scripts malveillants, pas une limite de cet
+outil. Concrètement : après chaque mise à jour du code, il faut redéployer
+(1 clic) et, **la toute première fois qu'une nouvelle permission est
+ajoutée** (ex. l'envoi d'emails automatiques), ré-autoriser le script une
+fois (1 clic). Ensuite, plus rien à faire.
+
+### Mettre à jour le backend après une modification de `Code.gs`
+
+1. Ouvrez le projet Apps Script (**script.google.com/home**, connecté à
+   `yena.event7@gmail.com`).
+2. Collez le nouveau contenu de `google-apps-script/Code.gs`, **Ctrl+S**.
+3. **Déployer > Gérer les déploiements** > icône crayon ✏️ sur le
+   déploiement actif > **Version : Nouvelle version** > **Déployer**.
+   (L'URL ne change pas, pas besoin de retoucher `js/config.js`.)
+4. **Uniquement si une nouvelle permission est nécessaire** (message
+   d'autorisation à l'écran) : sélectionnez la fonction `initialiser` dans
+   le menu déroulant en haut de l'éditeur (à côté de ▶️ Exécuter), cliquez
+   ▶️ **Exécuter**, puis autorisez l'accès. Cette fonction installe (ou
+   réinstalle sans doublon) le déclencheur quotidien des demandes d'avis.
+
+### Premier déploiement (si le backend n'est pas encore en ligne)
 
 ⚠️ N'utilisez **pas** le menu *Extensions > Apps Script* depuis le Google
 Sheet : sur un navigateur avec plusieurs comptes Google connectés, ce menu
-ouvre souvent le mauvais compte et affiche une erreur *« Page introuvable »*
-ou *« Impossible d'ouvrir le fichier »*. Passez directement par script.new,
-qui évite ce problème :
+ouvre souvent le mauvais compte et affiche une erreur *« Page introuvable »*.
+Passez directement par script.new :
 
-1. Allez sur **https://script.new**. Vérifiez en haut à droite que le
-   compte actif est bien **yena.event7@gmail.com** (cliquez sur l'avatar
-   pour changer de compte si besoin).
-2. Supprimez le contenu par défaut (`function myFunction() {...}`) et
-   collez-y tout le contenu de [`google-apps-script/Code.gs`](google-apps-script/Code.gs).
-3. Renommez le projet (ex. *« Yena Event Backend »*, en haut à gauche), puis
-   **Ctrl+S**.
-4. **Déployer > Nouveau déploiement** (cliquez l'icône ⚙️ à côté de *« Sélectionner le type »*
-   si le choix n'apparaît pas encore) :
-   - Type : *Application Web*
-   - Exécuter en tant que : *Moi (yena.event7@gmail.com)*
-   - Qui a accès : *Tout le monde*
-   - **Déployer**
-5. Un écran d'autorisation apparaît : *Autoriser l'accès* → choisissez
-   yena.event7@gmail.com. Si Google affiche *« Cette application n'est pas
-   validée »*, cliquez *Paramètres avancés* puis *Accéder à [nom du projet]
-   (non sécurisé)* — c'est normal pour un script que vous avez créé
-   vous-même, personne d'autre n'y a accès.
-6. Copiez l'URL de l'application Web fournie (elle se termine par `/exec`)
-   et collez-la dans `js/config.js` :
-   ```js
-   window.YENA_CONFIG = { APPS_SCRIPT_URL: 'https://script.google.com/macros/s/…/exec' };
-   ```
-7. Dans le Google Sheet **« Yena Event – Réservations (site web) »** (dans
-   Drive, dossier *Administratif*), passez la colonne **« Statut photos »**
-   d'une ligne à `Prêt` une fois les photos déposées dans le dossier Drive
-   correspondant, pour que le client puisse les voir depuis le site.
+1. Allez sur **https://script.new**, compte actif `yena.event7@gmail.com`.
+2. Collez le contenu de `google-apps-script/Code.gs`, nommez le projet, **Ctrl+S**.
+3. **Déployer > Nouveau déploiement** : Type *Application Web*, Exécuter en
+   tant que *Moi*, Accès *Tout le monde* > **Déployer** > autorisez l'accès.
+4. Copiez l'URL (`.../exec`) dans `js/config.js` → `APPS_SCRIPT_URL`.
+5. Sélectionnez puis exécutez la fonction `initialiser` (voir ci-dessus) pour
+   activer les demandes d'avis automatiques.
 
-Le script est autonome : il ouvre le Google Sheet par son identifiant à
-chaque appel (pas besoin d'être lancé depuis le Sheet lui-même), ce qui
-évite justement le problème de compte décrit ci-dessus.
-
-Tant que `APPS_SCRIPT_URL` est vide, le site reste pleinement fonctionnel
-(réservation, récapitulatif par email, ajout au calendrier du client) mais
-sans synchronisation automatique côté Yena, et la section « Mes photos »
-affiche un message indiquant que le service arrive bientôt.
-
-> Remarque : le compte Google connecté à cette session (`yena.event7@gmail.com`)
-> dispose déjà d'un dossier « Événements » organisé exactement selon cette
-> convention — le script s'y branche directement, aucune réorganisation
-> n'est nécessaire.
+Tant que `APPS_SCRIPT_URL` est vide, le site reste fonctionnel en mode
+dégradé (réservation en local, lien mailto manuel, pas de Calendar/Drive/emails
+automatiques, contact form silencieux côté Yena).
