@@ -82,6 +82,7 @@ em{font-style:italic; color:var(--gold);}
   color:var(--beige-light); display:flex; align-items:center; justify-content:center;
   font-family:var(--font-body); font-size:.85rem; font-weight:700; letter-spacing:.5px;
 }
+.logo-icon-img{height:38px; width:auto; display:block;}
 .logo-text em{font-style:normal; color:var(--gold);}
 .main-nav{display:flex; gap:28px;}
 .main-nav a{font-size:.92rem; font-weight:500; color:var(--text-soft); position:relative; padding:6px 0;}
