@@ -16,9 +16,13 @@ const header = document.getElementById('siteHeader');
 const burger = document.getElementById('burger');
 const mainNav = document.getElementById('mainNav');
 
+const scrollProgress = document.getElementById('scrollProgress');
 window.addEventListener('scroll', () => {
   header.classList.toggle('scrolled', window.scrollY > 12);
   document.getElementById('backToTop').classList.toggle('show', window.scrollY > 600);
+  const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+  const pct = docHeight > 0 ? (window.scrollY / docHeight) * 100 : 0;
+  scrollProgress.style.width = pct + '%';
 }, { passive: true });
 
 burger.addEventListener('click', () => {
@@ -310,7 +314,59 @@ prevBtn.addEventListener('click', () => {
   if (currentStep > 1) { currentStep--; renderStep(); }
 });
 
-bookingForm.addEventListener('submit', (e) => {
+let lastBooking = null;
+
+function pad2_(n) { return String(n).padStart(2, '0'); }
+
+function buildGoogleCalendarUrl_(booking) {
+  const d = new Date(booking.date + 'T00:00:00');
+  const end = new Date(d.getTime() + 86400000);
+  const fmt = (dt) => `${dt.getFullYear()}${pad2_(dt.getMonth() + 1)}${pad2_(dt.getDate())}`;
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: `${booking.service} — Yena Event`,
+    dates: `${fmt(d)}/${fmt(end)}`,
+    details: `Référence : ${booking.ref}\nInvités : ${booking.guests}\nLieu : ${booking.location || 'à confirmer'}\nOrganisé par Yena Event.`,
+    location: booking.location || '',
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+function buildIcsContent_(booking) {
+  const d = booking.date.replace(/-/g, '');
+  const end = new Date(new Date(booking.date + 'T00:00:00').getTime() + 86400000);
+  const endStr = `${end.getFullYear()}${pad2_(end.getMonth() + 1)}${pad2_(end.getDate())}`;
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const esc = (s) => String(s || '').replace(/[\\;,]/g, m => '\\' + m).replace(/\n/g, '\\n');
+  return [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Yena Event//Reservation//FR', 'BEGIN:VEVENT',
+    `UID:${booking.ref}@yena-event.fr`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART;VALUE=DATE:${d}`,
+    `DTEND;VALUE=DATE:${endStr}`,
+    `SUMMARY:${esc(booking.service + ' — Yena Event')}`,
+    `DESCRIPTION:${esc(`Référence : ${booking.ref}\nInvités : ${booking.guests}`)}`,
+    `LOCATION:${esc(booking.location)}`,
+    'END:VEVENT', 'END:VCALENDAR',
+  ].join('\r\n');
+}
+
+async function sendToBackend_(booking) {
+  const url = window.YENA_CONFIG && window.YENA_CONFIG.APPS_SCRIPT_URL;
+  if (!url) return { ok: false, error: 'not_configured' };
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(booking),
+    });
+    return await res.json();
+  } catch (err) {
+    return { ok: false, error: 'network_error' };
+  }
+}
+
+bookingForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!validateStep(4)) return;
 
@@ -329,12 +385,22 @@ bookingForm.addEventListener('submit', (e) => {
     message: document.getElementById('message').value,
     createdAt: new Date().toISOString(),
   };
+  lastBooking = booking;
+
+  submitBtn.disabled = true;
+  const originalLabel = submitBtn.innerHTML;
+  submitBtn.innerHTML = '<span class="spinner"></span>Envoi en cours…';
 
   try {
     const existing = JSON.parse(localStorage.getItem('yena_bookings') || '[]');
     existing.push(booking);
     localStorage.setItem('yena_bookings', JSON.stringify(existing));
   } catch (err) { /* localStorage indisponible : on continue sans bloquer */ }
+
+  await sendToBackend_(booking);
+
+  submitBtn.disabled = false;
+  submitBtn.innerHTML = originalLabel;
 
   document.getElementById('refNumber').textContent = ref;
   bookingForm.hidden = true;
@@ -346,11 +412,42 @@ bookingForm.addEventListener('submit', (e) => {
     `Bonjour,\n\nVoici le récapitulatif de votre demande :\n\n` +
     `Référence : ${ref}\nPrestation : ${booking.service}\nDate : ${booking.date}\n` +
     `Invités : ${booking.guests}\nLieu : ${booking.location || '—'}\nBudget : ${booking.budget || '—'}\n` +
-    `Contact : ${booking.fullName} — ${booking.email} — ${booking.phone}\n\nMerci de votre confiance,\nYena Event`
+    `Contact : ${booking.fullName} — ${booking.email} — ${booking.phone}\n\n` +
+    `Vous pourrez retrouver vos photos après l'évènement dans la section "Mes photos" du site, avec cette référence et votre email.\n\n` +
+    `Merci de votre confiance,\nYena Event`
   );
   document.getElementById('mailtoRecap').href = `mailto:${booking.email}?subject=${subject}&body=${body}`;
 
   showToast('Votre demande a été envoyée avec succès !');
+});
+
+document.getElementById('copyRefBtn').addEventListener('click', async (e) => {
+  if (!lastBooking) return;
+  try {
+    await navigator.clipboard.writeText(lastBooking.ref);
+    e.target.classList.add('copied');
+    e.target.textContent = '✓';
+    showToast('Référence copiée !');
+    setTimeout(() => { e.target.classList.remove('copied'); e.target.textContent = '📋'; }, 1800);
+  } catch (err) { showToast('Impossible de copier automatiquement, sélectionnez le texte.'); }
+});
+
+document.getElementById('addGoogleCalBtn').addEventListener('click', () => {
+  if (!lastBooking) return;
+  window.open(buildGoogleCalendarUrl_(lastBooking), '_blank', 'noopener');
+});
+
+document.getElementById('downloadIcsBtn').addEventListener('click', () => {
+  if (!lastBooking) return;
+  const blob = new Blob([buildIcsContent_(lastBooking)], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `yena-event-${lastBooking.ref}.ics`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 });
 
 document.getElementById('newRequestBtn').addEventListener('click', () => {
@@ -378,4 +475,64 @@ document.getElementById('newsletterForm').addEventListener('submit', (e) => {
   e.preventDefault();
   showToast('Merci pour votre inscription à la newsletter !');
   e.target.reset();
+});
+
+/* ====== Mes Photos ====== */
+const photosForm = document.getElementById('photosForm');
+const photosResult = document.getElementById('photosResult');
+const photosSubmitBtn = document.getElementById('photosSubmitBtn');
+
+function showPhotosResult_(html, state) {
+  photosResult.className = 'photos-result state-' + state;
+  photosResult.innerHTML = html;
+  photosResult.hidden = false;
+}
+
+photosForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const ref = document.getElementById('photosRef').value.trim();
+  const email = document.getElementById('photosEmail').value.trim();
+  if (!ref || !email) return;
+
+  const url = window.YENA_CONFIG && window.YENA_CONFIG.APPS_SCRIPT_URL;
+  if (!url) {
+    showPhotosResult_(
+      `<h4>Service bientôt disponible</h4><p>La consultation des photos en ligne est en cours de mise en place. En attendant, Yena Event vous envoie le lien de votre dossier photos par email dès qu'il est prêt.</p>`,
+      'pending'
+    );
+    return;
+  }
+
+  const originalLabel = photosSubmitBtn.textContent;
+  photosSubmitBtn.disabled = true;
+  photosSubmitBtn.innerHTML = '<span class="spinner"></span>Recherche…';
+
+  try {
+    const params = new URLSearchParams({ ref, email });
+    const res = await fetch(`${url}?${params.toString()}`);
+    const data = await res.json();
+
+    if (!data.ok) {
+      showPhotosResult_(
+        `<h4>Aucune réservation trouvée</h4><p>Vérifiez votre référence et l'email utilisé lors de la réservation, ou contactez-nous directement.</p>`,
+        'error'
+      );
+    } else if (data.status === 'ready') {
+      showPhotosResult_(
+        `<h4>📸 Vos photos sont prêtes !</h4><p>${data.service || ''} — ${data.fullName || ''}</p>` +
+        `<a href="${data.driveFolderUrl}" target="_blank" rel="noopener" class="btn btn-primary">Ouvrir mon dossier photos</a>`,
+        'ready'
+      );
+    } else {
+      showPhotosResult_(
+        `<h4>Vos photos arrivent bientôt</h4><p>Votre réservation (${data.service || ''}) est bien enregistrée. Yena Event dépose vos photos après l'évènement : revenez ensuite avec la même référence pour les consulter.</p>`,
+        'pending'
+      );
+    }
+  } catch (err) {
+    showPhotosResult_(`<h4>Erreur de connexion</h4><p>Impossible de contacter le service pour le moment, réessayez plus tard.</p>`, 'error');
+  } finally {
+    photosSubmitBtn.disabled = false;
+    photosSubmitBtn.textContent = originalLabel;
+  }
 });

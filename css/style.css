@@ -149,6 +149,8 @@ em{font-style:italic; color:var(--gold);}
 .section-dark{background:linear-gradient(160deg, var(--brown-950), var(--brown)); color:var(--cream);}
 .section-dark h2, .section-dark .eyebrow{color:var(--cream);}
 .section-dark .section-sub{color:rgba(251,247,239,.75);}
+.section-dark .btn-outline{border-color:rgba(251,247,239,.6); color:var(--cream);}
+.section-dark .btn-outline:hover{background:var(--cream); color:var(--brown-950); border-color:var(--cream);}
 .section-head{max-width:640px; margin:0 auto 56px; text-align:center;}
 .section-head.light h2{color:var(--cream);}
 .eyebrow{color:var(--gold); text-transform:uppercase; letter-spacing:2px; font-size:.78rem; font-weight:700; margin-bottom:10px;}
@@ -339,6 +341,43 @@ em{font-style:italic; color:var(--gold);}
 .footer-bottom{padding:24px; text-align:center; font-size:.8rem;}
 @media(max-width:860px){.footer-grid{grid-template-columns:1fr 1fr; row-gap:32px;}}
 @media(max-width:520px){.footer-grid{grid-template-columns:1fr;}}
+
+/* ====== Scroll progress ====== */
+.scroll-progress{
+  position:fixed; top:0; left:0; height:3px; width:0%; z-index:1100;
+  background:linear-gradient(90deg, var(--gold), var(--brown-light)); transition:width .1s linear;
+}
+
+/* ====== Focus visibility ====== */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible{
+  outline:2px solid var(--gold); outline-offset:2px; border-radius:4px;
+}
+
+/* ====== Copy button ====== */
+.copy-btn{
+  background:none; border:1px solid rgba(251,247,239,.3); border-radius:6px; cursor:pointer;
+  font-size:.85rem; padding:2px 8px; margin-left:6px; vertical-align:middle; transition:.2s;
+}
+.copy-btn:hover{border-color:var(--gold); background:rgba(185,136,79,.15);}
+.copy-btn.copied{background:var(--gold); border-color:var(--gold);}
+
+/* ====== Mes Photos ====== */
+.photos-card{max-width:640px; margin:0 auto; background:var(--white); border-radius:var(--radius-lg); padding:40px; box-shadow:var(--shadow-sm);}
+.photos-form{display:flex; flex-direction:column; gap:18px;}
+.photos-form .field label{color:var(--text);}
+.photos-form input{padding:12px 14px; border-radius:var(--radius-sm); border:1px solid rgba(82,49,27,.18); font-family:var(--font-body);}
+.photos-form input:focus{outline:2px solid var(--gold);}
+.photos-result{margin-top:24px; padding:22px; border-radius:var(--radius-sm); font-size:.92rem; line-height:1.5;}
+.photos-result.state-ready{background:rgba(63,122,79,.1); border:1px solid rgba(63,122,79,.3); color:var(--success);}
+.photos-result.state-pending{background:var(--beige-light); border:1px solid rgba(82,49,27,.15); color:var(--text-soft);}
+.photos-result.state-error{background:rgba(176,58,46,.08); border:1px solid rgba(176,58,46,.3); color:var(--error);}
+.photos-result h4{margin:0 0 8px; font-family:var(--font-body); font-weight:600; color:inherit;}
+.photos-result .btn{margin-top:12px;}
+.spinner{
+  display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,.4);
+  border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; margin-right:8px; vertical-align:-3px;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
 
 /* ====== Misc ====== */
 .back-to-top{

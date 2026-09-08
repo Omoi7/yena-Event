@@ -13,6 +13,7 @@
 </head>
 <body>
 
+<div class="scroll-progress" id="scrollProgress" aria-hidden="true"></div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
 <header class="site-header" id="siteHeader">
@@ -28,6 +29,7 @@
       <a href="#process">Déroulement</a>
       <a href="#galerie">Galerie</a>
       <a href="#avis">Avis</a>
+      <a href="#photos">Mes photos</a>
       <a href="#faq">FAQ</a>
       <a href="#contact">Contact</a>
     </nav>
@@ -270,13 +272,42 @@
         <div class="booking-success" id="bookingSuccess" hidden>
           <div class="success-icon">✓</div>
           <h3>Votre demande a bien été envoyée !</h3>
-          <p>Référence de votre demande : <strong id="refNumber"></strong></p>
-          <p>Notre équipe revient vers vous sous 48h à l'adresse indiquée pour finaliser votre devis et confirmer la prestation.</p>
+          <p>Référence de votre demande : <strong id="refNumber"></strong> <button type="button" class="copy-btn" id="copyRefBtn" title="Copier la référence">📋</button></p>
+          <p>Notre équipe revient vers vous sous 48h à l'adresse indiquée pour finaliser votre devis et confirmer la prestation. Conservez votre référence : elle vous permettra de retrouver vos photos après l'évènement.</p>
+          <div class="success-actions">
+            <button type="button" class="btn btn-outline" id="addGoogleCalBtn">📅 Ajouter à Google Calendar</button>
+            <button type="button" class="btn btn-outline" id="downloadIcsBtn">⬇️ Télécharger le .ics</button>
+          </div>
           <div class="success-actions">
             <a href="#" id="mailtoRecap" class="btn btn-outline">Recevoir le récapitulatif par email</a>
             <button type="button" class="btn btn-primary" id="newRequestBtn">Faire une nouvelle demande</button>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MES PHOTOS -->
+  <section id="photos" class="section section-alt">
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">Après votre évènement</p>
+        <h2>Retrouvez vos photos en ligne</h2>
+        <p class="section-sub">Chaque évènement dispose de son propre espace privé Google Drive. Indiquez votre référence de réservation et votre email pour y accéder.</p>
+      </div>
+      <div class="photos-card reveal">
+        <form id="photosForm" class="photos-form" novalidate>
+          <div class="field">
+            <label for="photosRef">Référence de réservation *</label>
+            <input type="text" id="photosRef" placeholder="Ex : YE-M8X2K1" required>
+          </div>
+          <div class="field">
+            <label for="photosEmail">Email utilisé pour la réservation *</label>
+            <input type="email" id="photosEmail" placeholder="vous@exemple.com" required>
+          </div>
+          <button type="submit" class="btn btn-primary" id="photosSubmitBtn">Voir mes photos</button>
+        </form>
+        <div class="photos-result" id="photosResult" hidden></div>
       </div>
     </div>
   </section>
@@ -370,6 +401,7 @@
 
 <button id="backToTop" class="back-to-top" aria-label="Retour en haut">↑</button>
 
+<script src="js/config.js"></script>
 <script src="js/script.js"></script>
 </body>
 </html>
