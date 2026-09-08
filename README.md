@@ -14,7 +14,8 @@ Site vitrine interactif pour l'agence évènementielle Yena Event (mariages, ann
 - **Ajout au calendrier en un clic** (Google Calendar + fichier .ics) dès la validation de la demande
 - **Espace « Mes photos »** : chaque client retrouve les photos de son évènement (référence + email) dans le dossier Google Drive dédié créé automatiquement pour son évènement
 - **Emails automatiques** : confirmation au client et notification à Yena à chaque réservation, message de contact envoyé directement par email, et **demande d'avis Google automatique** envoyée au client 2 jours après son évènement
-- **Newsletter** : Yena écrit son texte dans le Google Sheet, elle part automatiquement à tous les anciens clients et aux inscrits du site (lien de désinscription inclus)
+- **Newsletter** : Yena écrit son texte (depuis le Sheet ou la page admin), elle part automatiquement à tous les anciens clients et aux inscrits du site (lien de désinscription inclus)
+- **Page d'administration** (`admin.html`, protégée par mot de passe) : gérer les réservations, activer l'accès aux photos et envoyer la newsletter sans jamais ouvrir le Google Sheet
 - Formulaire de contact (envoyé par email à Yena) et inscription newsletter
 - Barre de progression de lecture, copie de référence en un clic, focus clavier accessible
 - Palette de marque : marron `#52311b` / beige `#e6d6bc`
@@ -37,10 +38,13 @@ puis rendez-vous sur `http://localhost:8080`.
 
 ```
 index.html                    Page principale
+admin.html                    Page d'administration (voir ci-dessous)
 css/style.css                 Styles (design system, responsive)
+css/admin.css                 Styles spécifiques à l'administration
 js/config.js                  Configuration (URL du backend Google Apps Script)
 js/script.js                  Interactivité (menu, réservation, Mes photos, animations)
-google-apps-script/Code.gs    Backend Calendar + Drive (voir ci-dessous)
+js/admin.js                   Interactivité de la page d'administration
+google-apps-script/Code.gs    Backend Calendar + Drive + emails + admin (voir ci-dessous)
 ```
 
 ## Automatisation : Calendar, Drive, emails et avis Google
@@ -60,10 +64,44 @@ action manuelle** :
 
 Concrètement, une fois cette automatisation en place, il n'y a plus que deux
 choses à faire manuellement : déposer les photos dans le bon dossier Drive
-après l'évènement (+ statut `Prêt`), et écrire le texte d'une newsletter
-quand on veut en envoyer une — tout le reste (agenda, dossier, emails de
-confirmation, notification, demande d'avis, envoi de la newsletter) tourne
-tout seul.
+après l'évènement, et écrire le texte d'une newsletter quand on veut en
+envoyer une — tout le reste (agenda, dossier, emails de confirmation,
+notification, demande d'avis, envoi de la newsletter) tourne tout seul. Ces
+deux gestes peuvent se faire **directement depuis le site**, sans ouvrir le
+Google Sheet — voir la section Administration ci-dessous.
+
+### Page d'administration (`admin.html`)
+
+Une page dédiée, protégée par mot de passe, permet à Yena de piloter le site
+sans jamais ouvrir le Google Sheet :
+
+- **Tableau des réservations** : toutes les demandes, avec un bouton
+  **« Marquer prêtes »** pour activer l'accès aux photos d'un client en un
+  clic (équivalent à passer la colonne « Statut photos » à `Prêt`).
+- **Newsletter** : un champ Sujet + un champ Contenu, et un bouton
+  **« Envoyer maintenant »** qui l'envoie immédiatement à tous les abonnés
+  (avec confirmation avant l'envoi, puisque c'est irréversible).
+- Compteurs : nombre de réservations, de photos en attente, d'abonnés.
+
+**Accès :** ouvrir `admin.html` (ex. `https://omoi7.github.io/yena-Event/admin.html`)
+— cette page n'est volontairement liée nulle part ailleurs sur le site
+public. Elle n'est pas indexée par les moteurs de recherche.
+
+⚠️ **Sécurité : le mot de passe ne doit jamais être écrit dans le code du
+dépôt** (qui est public sur GitHub). Il vit uniquement dans les propriétés
+du script Apps Script, jamais commité nulle part :
+
+1. Dans l'éditeur Apps Script (script.google.com), cliquez l'icône ⚙️
+   **« Paramètres du projet »** (menu de gauche).
+2. Section **« Propriétés du script »** > **« Ajouter une propriété de
+   script »**.
+3. Propriété : `ADMIN_KEY` — Valeur : un mot de passe fort (gardez-le dans
+   un gestionnaire de mots de passe, il donne accès aux coordonnées de tous
+   les clients et à l'envoi de la newsletter).
+4. **« Enregistrer les propriétés du script »**.
+
+C'est ce mot de passe qu'il faut saisir sur `admin.html`. Tant qu'aucune
+valeur `ADMIN_KEY` n'est configurée, la page refuse toute connexion.
 
 ### Newsletter aux anciens clients
 

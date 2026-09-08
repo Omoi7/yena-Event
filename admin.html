@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<title>Administration — Yena Event</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/admin.css">
+<link rel="icon" type="image/png" href="assets/favicon.png">
+</head>
+<body class="admin-body">
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<header class="admin-header">
+  <div class="admin-header-inner">
+    <a href="index.html" class="logo">
+      <img src="assets/logo-icon.png" alt="" class="logo-icon-img">
+      <span class="logo-text">Yena <em>Event</em></span>
+    </a>
+    <span class="admin-title">Administration</span>
+    <button type="button" class="btn btn-outline btn-sm" id="logoutBtn" hidden>Se déconnecter</button>
+  </div>
+</header>
+
+<main class="admin-main">
+
+  <!-- LOGIN -->
+  <section id="loginView" class="admin-login">
+    <form id="loginForm" class="admin-login-card">
+      <h1>Espace administration</h1>
+      <p class="admin-login-sub">Réservé à Yena Event. Saisissez le mot de passe configuré dans les propriétés du script.</p>
+      <div class="field">
+        <label for="adminKeyInput">Mot de passe</label>
+        <input type="password" id="adminKeyInput" autocomplete="current-password" required>
+      </div>
+      <p class="field-error" id="loginError"></p>
+      <button type="submit" class="btn btn-primary" id="loginBtn">Se connecter</button>
+    </form>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="dashboardView" class="admin-dashboard" hidden>
+
+    <div class="admin-stats">
+      <div class="admin-stat-card">
+        <span class="admin-stat-num" id="statBookings">0</span>
+        <span class="admin-stat-label">réservations</span>
+      </div>
+      <div class="admin-stat-card">
+        <span class="admin-stat-num" id="statPending">0</span>
+        <span class="admin-stat-label">photos en attente</span>
+      </div>
+      <div class="admin-stat-card">
+        <span class="admin-stat-num" id="statSubscribers">0</span>
+        <span class="admin-stat-label">abonnés newsletter</span>
+      </div>
+    </div>
+
+    <div class="admin-panel">
+      <div class="admin-panel-head">
+        <h2>Réservations</h2>
+        <button type="button" class="btn btn-outline btn-sm" id="refreshBtn">↻ Actualiser</button>
+      </div>
+      <div class="admin-table-wrap">
+        <table class="admin-table" id="bookingsTable">
+          <thead>
+            <tr>
+              <th>Référence</th>
+              <th>Client</th>
+              <th>Prestation</th>
+              <th>Date</th>
+              <th>Contact</th>
+              <th>Statut photos</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="bookingsBody">
+            <tr><td colspan="7" class="admin-empty">Chargement…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="admin-panel">
+      <div class="admin-panel-head">
+        <h2>Newsletter</h2>
+      </div>
+      <form id="newsletterAdminForm" class="admin-newsletter-form">
+        <div class="field">
+          <label for="nlSujet">Sujet</label>
+          <input type="text" id="nlSujet" placeholder="Ex : Nos disponibilités pour les fêtes de fin d'année" required>
+        </div>
+        <div class="field">
+          <label for="nlContenu">Contenu</label>
+          <textarea id="nlContenu" rows="8" placeholder="Écrivez votre newsletter ici (texte simple)…" required></textarea>
+        </div>
+        <div class="admin-newsletter-actions">
+          <p class="admin-newsletter-hint">Sera envoyée immédiatement à <strong id="nlRecipientCount">0</strong> abonné(e)s.</p>
+          <button type="submit" class="btn btn-primary" id="nlSendBtn">Envoyer maintenant</button>
+        </div>
+      </form>
+    </div>
+
+  </section>
+
+</main>
+
+<script src="js/config.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>

@@ -19,6 +19,13 @@
  *  - Une fois les photos déposées par Yena et le statut passé à "Prêt" dans
  *    le tableau, les clients peuvent retrouver leurs photos depuis le site
  *    en indiquant leur référence de réservation + leur email.
+ *  - Une page d'administration (admin.html) permet à Yena de faire tout ça
+ *    (voir les réservations, marquer des photos prêtes, écrire et envoyer
+ *    une newsletter) directement depuis le site, sans toucher au Sheet.
+ *    Protégée par un mot de passe (ADMIN_KEY) qui doit être configuré dans
+ *    les propriétés du script — voir ÉTAPE ADMIN ci-dessous. Ce mot de passe
+ *    ne doit JAMAIS être écrit dans ce fichier ni commité sur GitHub (le
+ *    dépôt est public) : il vit uniquement dans les propriétés du script.
  *
  * INSTALLATION / MISE À JOUR (connecté à yena.event7@gmail.com) :
  *  1. Allez sur https://script.google.com/home, ouvrez le projet
@@ -42,6 +49,14 @@
  *     aucun email, mais ça crée immédiatement les onglets "Newsletter
  *     Abonnés" et "Newsletter Campagnes" dans le Sheet, et remplit la liste
  *     des abonnés avec tous vos anciens clients.
+ *  6. **ÉTAPE ADMIN, une seule fois** : dans l'éditeur, cliquez sur l'icône
+ *     ⚙️ "Paramètres du projet" (menu de gauche) > section "Propriétés du
+ *     script" > "Ajouter une propriété de script" :
+ *       - Propriété : ADMIN_KEY
+ *       - Valeur : un mot de passe fort de votre choix (gardez-le secret,
+ *         c'est lui qui protège l'accès à la page d'administration)
+ *     Cliquez "Enregistrer les propriétés du script". C'est ce mot de passe
+ *     que vous saisirez sur la page /admin.html du site.
  *
  * Cette autorisation ponctuelle est une exigence de sécurité de Google (un
  * script qui va envoyer des emails tout seul, sans supervision, doit être
@@ -136,10 +151,84 @@ function doPost(e) {
     const data = JSON.parse(e.postData.contents);
     if (data.type === 'contact') return handleContact_(data);
     if (data.type === 'newsletter') return handleNewsletterSignup_(data);
+    if (data.type === 'adminAuth') return handleAdminAuth_(data);
+    if (data.type === 'adminList') return handleAdminList_(data);
+    if (data.type === 'adminMarkPhotosReady') return handleAdminMarkPhotosReady_(data);
+    if (data.type === 'adminSendNewsletter') return handleAdminSendNewsletter_(data);
     return handleBooking_(data);
   } catch (err) {
     return jsonOut_({ ok: false, error: 'server_error', message: String(err) });
   }
+}
+
+/* ====== Administration (page admin.html du site) ====== */
+
+function isAdminAuthorized_(data) {
+  const key = PropertiesService.getScriptProperties().getProperty('ADMIN_KEY');
+  return !!key && String(data.adminKey || '') === key;
+}
+
+function handleAdminAuth_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+  return jsonOut_({ ok: true });
+}
+
+/** Liste des réservations + statistiques pour le tableau de bord admin. */
+function handleAdminList_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  const values = getSheet_().getDataRange().getValues();
+  const bookings = values.slice(1)
+    .filter(r => r[COL['Référence']])
+    .map(r => ({
+      ref: r[COL['Référence']],
+      service: r[COL['Prestation']],
+      eventDate: formatDateForJson_(r[COL['Date évènement']]),
+      guests: r[COL['Invités']],
+      location: r[COL['Lieu']],
+      fullName: r[COL['Nom']],
+      email: r[COL['Email']],
+      phone: r[COL['Téléphone']],
+      statutPhotos: r[COL['Statut photos']] || 'En attente',
+      driveFolderUrl: r[COL['Lien dossier Drive']],
+    }))
+    .reverse();
+
+  const abonnesCount = Math.max(getAbonnesSheet_().getLastRow() - 1, 0);
+  return jsonOut_({ ok: true, bookings, abonnesCount });
+}
+
+function formatDateForJson_(v) {
+  if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  return v || '';
+}
+
+/** Marque les photos d'une réservation comme prêtes (visible dans "Mes photos"). */
+function handleAdminMarkPhotosReady_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  const sheet = getSheet_();
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][COL['Référence']]).trim() === String(data.ref).trim()) {
+      sheet.getRange(i + 1, COL['Statut photos'] + 1).setValue('Prêt');
+      return jsonOut_({ ok: true });
+    }
+  }
+  return jsonOut_({ ok: false, error: 'not_found' });
+}
+
+/** Envoi immédiat d'une newsletter depuis la page admin (sans attendre le déclencheur quotidien). */
+function handleAdminSendNewsletter_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  const sujet = String(data.sujet || '').trim();
+  const contenu = String(data.contenu || '').trim();
+  if (!sujet || !contenu) return jsonOut_({ ok: false, error: 'missing_field' });
+
+  const envoyes = sendNewsletterToRecipients_(sujet, contenu);
+  getCampagnesSheet_().appendRow([sujet, contenu, 'Envoyé', new Date(), envoyes]);
+  return jsonOut_({ ok: true, count: envoyes });
 }
 
 /** Inscription à la newsletter depuis le formulaire du site. */
@@ -401,26 +490,45 @@ function syncAbonnesFromReservations_() {
 }
 
 /**
- * Envoie chaque campagne de l'onglet "Newsletter Campagnes" dont le Statut
- * est "Envoyer maintenant" à tous les abonnés non désinscrits (anciens
- * clients synchronisés automatiquement + inscrits via le site), avec un
- * lien de désinscription. Appelée automatiquement chaque jour — Yena n'a
- * qu'à écrire son texte dans le Sheet et passer le Statut à "Envoyer
- * maintenant" pour que l'envoi parte tout seul le lendemain matin (ou tout
- * de suite en exécutant cette fonction manuellement depuis l'éditeur).
+ * Envoie un email (sujet + contenu) à tous les abonnés non désinscrits
+ * (anciens clients synchronisés automatiquement + inscrits via le site),
+ * avec un lien de désinscription individuel. Renvoie le nombre d'envois.
+ * Utilisée à la fois par le traitement quotidien des campagnes du Sheet et
+ * par l'envoi immédiat depuis la page admin.
  */
-function envoyerNewsletter() {
+function sendNewsletterToRecipients_(sujet, contenu) {
   syncAbonnesFromReservations_();
 
-  const campSheet = getCampagnesSheet_();
-  const campValues = campSheet.getDataRange().getValues();
   const abValues = getAbonnesSheet_().getDataRange().getValues();
-
   const destinataires = [...new Map(
     abValues.slice(1)
       .filter(r => r[ACOL['Email']] && String(r[ACOL['Désabonné']]).trim().toLowerCase() !== 'oui')
       .map(r => [String(r[ACOL['Email']]).trim().toLowerCase(), String(r[ACOL['Email']]).trim()])
   ).values()];
+
+  const webAppUrl = ScriptApp.getService().getUrl();
+  let envoyes = 0;
+  for (const email of destinataires) {
+    if (MailApp.getRemainingDailyQuota() < 1) break;
+    const unsubUrl = `${webAppUrl}?action=unsubscribe&email=${encodeURIComponent(email)}`;
+    const body = `${contenu}\n\n---\nVous recevez cet email en tant que client(e) de Yena Event ou abonné(e) à la newsletter.\nSe désinscrire : ${unsubUrl}`;
+    GmailApp.sendEmail(email, sujet, body, { name: 'Yena Event' });
+    envoyes++;
+  }
+  return envoyes;
+}
+
+/**
+ * Envoie chaque campagne de l'onglet "Newsletter Campagnes" dont le Statut
+ * est "Envoyer maintenant". Appelée automatiquement chaque jour — Yena n'a
+ * qu'à écrire son texte dans le Sheet et passer le Statut à "Envoyer
+ * maintenant" pour que l'envoi parte tout seul le lendemain matin (ou tout
+ * de suite en exécutant cette fonction manuellement depuis l'éditeur, ou en
+ * l'envoyant directement depuis la page admin du site).
+ */
+function envoyerNewsletter() {
+  const campSheet = getCampagnesSheet_();
+  const campValues = campSheet.getDataRange().getValues();
 
   for (let i = 1; i < campValues.length; i++) {
     const statut = String(campValues[i][CCOL['Statut']]).trim();
@@ -430,16 +538,7 @@ function envoyerNewsletter() {
     const contenu = campValues[i][CCOL['Contenu']];
     if (!sujet || !contenu) continue;
 
-    const webAppUrl = ScriptApp.getService().getUrl();
-    let envoyes = 0;
-    for (const email of destinataires) {
-      if (MailApp.getRemainingDailyQuota() < 1) break;
-      const unsubUrl = `${webAppUrl}?action=unsubscribe&email=${encodeURIComponent(email)}`;
-      const body = `${contenu}\n\n---\nVous recevez cet email en tant que client(e) de Yena Event ou abonné(e) à la newsletter.\nSe désinscrire : ${unsubUrl}`;
-      GmailApp.sendEmail(email, sujet, body, { name: 'Yena Event' });
-      envoyes++;
-    }
-
+    const envoyes = sendNewsletterToRecipients_(sujet, contenu);
     campSheet.getRange(i + 1, CCOL['Statut'] + 1).setValue('Envoyé');
     campSheet.getRange(i + 1, CCOL["Date d'envoi"] + 1).setValue(new Date());
     campSheet.getRange(i + 1, CCOL['Destinataires'] + 1).setValue(envoyes);
