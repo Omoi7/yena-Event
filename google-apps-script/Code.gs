@@ -9,21 +9,33 @@
  *    le tableau, les clients peuvent retrouver leurs photos depuis le site
  *    en indiquant leur référence de réservation + leur email.
  *
- * INSTALLATION (5 minutes, une seule fois) :
- *  1. Ouvrez le Google Sheet "Yena Event – Réservations (site web)" dans Drive.
- *  2. Menu Extensions > Apps Script.
- *  3. Supprimez le contenu par défaut et collez tout le contenu de ce fichier.
+ * INSTALLATION (5 minutes, une seule fois) — connecté à yena.event7@gmail.com :
+ *  1. Allez sur https://script.new (vérifiez en haut à droite que le compte
+ *     actif est bien yena.event7@gmail.com, changez de compte sinon).
+ *     N'utilisez PAS le menu Extensions > Apps Script du Sheet : sur
+ *     certains navigateurs avec plusieurs comptes Google connectés, ce menu
+ *     ouvre le mauvais compte et affiche "Page introuvable".
+ *  2. Supprimez le contenu par défaut et collez tout le contenu de ce fichier.
+ *  3. Donnez un nom au projet (ex. "Yena Event Backend"), Ctrl+S.
  *  4. Cliquez sur "Déployer" > "Nouveau déploiement".
- *     - Type : "Application Web"
+ *     - Type : "Application Web" (cliquez l'icône ⚙️ si le choix n'apparaît pas)
  *     - Exécuter en tant que : Moi (yena.event7@gmail.com)
  *     - Qui a accès : Tout le monde
- *  5. Copiez l'URL de l'application Web fournie.
- *  6. Collez cette URL dans js/config.js du site, dans APPS_SCRIPT_URL.
- *  7. Ré-autorisez le script si Google le demande (c'est votre propre script).
+ *  5. Cliquez "Autoriser l'accès", choisissez yena.event7@gmail.com, puis
+ *     "Paramètres avancés" > "Accéder à [nom du projet] (dangereux)" si un
+ *     écran "Application non validée" apparaît (normal pour votre propre
+ *     script, personne d'autre n'y a accès).
+ *  6. Copiez l'URL de l'application Web fournie (se termine par /exec).
+ *  7. Collez cette URL dans js/config.js du site, dans APPS_SCRIPT_URL.
  */
 
 // ID du dossier Drive "Événements" où sont déjà rangés tous les dossiers clients.
 const EVENTS_FOLDER_ID = '1TE3TYCJag1w4jG2-uyGnAdXBEhA3fAOd';
+
+// ID du Google Sheet "Yena Event – Réservations (site web)" qui sert de base
+// de données. Le script est autonome (pas besoin d'être ouvert depuis le
+// Sheet) : il ouvre ce classeur par son ID à chaque appel.
+const SHEET_ID = '1ejDBSsaLYz62OhlqiZL4FLA9ji1IfJoh7a9ujHm8j6k';
 
 const HEADERS = [
   'Référence', 'Date de la demande', 'Prestation', 'Date évènement', 'Invités',
@@ -34,7 +46,7 @@ const HEADERS = [
 const COL = HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
 
 function getSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = SpreadsheetApp.openById(SHEET_ID);
   const sheet = ss.getSheets()[0];
   if (sheet.getLastRow() === 0) {
     sheet.appendRow(HEADERS);
