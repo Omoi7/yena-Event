@@ -13,5 +13,5 @@
  * et la section "Mes photos" indique que le service n'est pas encore actif.
  */
 window.YENA_CONFIG = {
-  APPS_SCRIPT_URL: '',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbx2xVXKJiU-ncqvKN-J1fogxQq-7_RwrrS1oBF_E1AfLCvwC4i_4ezwAhO6GhkqR6zsgA/exec',
 };
