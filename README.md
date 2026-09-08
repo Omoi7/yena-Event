@@ -14,7 +14,8 @@ Site vitrine interactif pour l'agence évènementielle Yena Event (mariages, ann
 - **Ajout au calendrier en un clic** (Google Calendar + fichier .ics) dès la validation de la demande
 - **Espace « Mes photos »** : chaque client retrouve les photos de son évènement (référence + email) dans le dossier Google Drive dédié créé automatiquement pour son évènement
 - **Emails automatiques** : confirmation au client et notification à Yena à chaque réservation, message de contact envoyé directement par email, et **demande d'avis Google automatique** envoyée au client 2 jours après son évènement
-- Formulaire de contact (envoyé par email à Yena) et newsletter
+- **Newsletter** : Yena écrit son texte dans le Google Sheet, elle part automatiquement à tous les anciens clients et aux inscrits du site (lien de désinscription inclus)
+- Formulaire de contact (envoyé par email à Yena) et inscription newsletter
 - Barre de progression de lecture, copie de référence en un clic, focus clavier accessible
 - Palette de marque : marron `#52311b` / beige `#e6d6bc`
 
@@ -54,13 +55,41 @@ action manuelle** :
 | Un client valide une réservation | Évènement créé dans l'agenda Google de Yena · Dossier Drive client créé dans « Événements » (même convention `AAAA-MM-JJ_Prénom_Prestation` que Yena utilise déjà) · Ligne ajoutée au Google Sheet de suivi · **Email de confirmation envoyé au client** · **Email de notification envoyé à Yena** |
 | Un visiteur envoie le formulaire de contact | **Email envoyé directement à Yena**, avec réponse possible en direct au client (reply-to) |
 | 2 jours après la date d'un évènement | **Email automatique envoyé au client** pour lui demander de laisser un avis Google (lien vers [la fiche Yena Event](https://maps.app.goo.gl/5UB9AKGLjTxDrgbWA)) — envoyé une seule fois par réservation |
+| Yena écrit une newsletter et passe son Statut à `Envoyer maintenant` | **Envoyée automatiquement** à tous les anciens clients et abonnés du site, le lendemain matin au plus tard |
 | Yena dépose les photos et passe une ligne à `Prêt` (colonne « Statut photos » du Sheet) | Le client peut voir/ouvrir son dossier photo depuis l'espace « Mes photos » du site |
 
-Concrètement, une fois cette automatisation en place, il n'y a plus qu'**une
-seule chose à faire manuellement** : déposer les photos dans le bon dossier
-Drive après l'évènement et passer son statut à `Prêt` dans le tableau — tout
-le reste (agenda, dossier, emails de confirmation, notification, demande
-d'avis) tourne tout seul.
+Concrètement, une fois cette automatisation en place, il n'y a plus que deux
+choses à faire manuellement : déposer les photos dans le bon dossier Drive
+après l'évènement (+ statut `Prêt`), et écrire le texte d'une newsletter
+quand on veut en envoyer une — tout le reste (agenda, dossier, emails de
+confirmation, notification, demande d'avis, envoi de la newsletter) tourne
+tout seul.
+
+### Newsletter aux anciens clients
+
+Deux nouveaux onglets apparaissent automatiquement dans le Google Sheet
+**« Yena Event – Réservations (site web) »** :
+
+- **« Newsletter Abonnés »** : la liste des destinataires. Remplie
+  automatiquement avec l'email de tous les anciens clients (déduits du
+  tableau de réservations) + les personnes inscrites via le formulaire du
+  site (bas de page). Une colonne « Désabonné » exclut automatiquement
+  quelqu'un qui a cliqué sur le lien de désinscription présent dans chaque
+  newsletter.
+- **« Newsletter Campagnes »** : c'est ici que Yena écrit sa newsletter.
+
+**Pour envoyer une newsletter :**
+1. Ouvrir l'onglet « Newsletter Campagnes » du Sheet.
+2. Sur une nouvelle ligne (ou celle d'exemple déjà présente), remplir
+   **Sujet** et **Contenu** (texte brut, pas de mise en forme).
+3. Passer la colonne **Statut** à `Envoyer maintenant`.
+4. C'est tout : l'envoi part automatiquement au prochain passage du
+   déclencheur quotidien (10h, donc au plus tard le lendemain matin). La
+   ligne passe ensuite à `Envoyé` avec la date et le nombre de destinataires.
+
+Pour un envoi immédiat sans attendre le lendemain : ouvrir l'éditeur Apps
+Script, sélectionner la fonction `envoyerNewsletter` dans le menu déroulant,
+cliquer ▶️ Exécuter.
 
 ### Pourquoi une étape reste manuelle (et pourquoi ce n'est pas contournable)
 

@@ -499,11 +499,26 @@ document.getElementById('contactForm').addEventListener('submit', async (e) => {
   }
 });
 
-/* ====== Newsletter (client-side only) ====== */
-document.getElementById('newsletterForm').addEventListener('submit', (e) => {
+/* ====== Newsletter ====== */
+document.getElementById('newsletterForm').addEventListener('submit', async (e) => {
   e.preventDefault();
-  showToast('Merci pour votre inscription à la newsletter !');
-  e.target.reset();
+  const btn = e.target.querySelector('button[type="submit"]');
+  const originalLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '…';
+
+  const email = document.getElementById('newsletterEmail').value;
+  const result = await sendToBackend_({ type: 'newsletter', email });
+
+  btn.disabled = false;
+  btn.textContent = originalLabel;
+
+  if (result.ok || result.error === 'not_configured') {
+    showToast('Merci pour votre inscription à la newsletter !');
+    e.target.reset();
+  } else {
+    showToast('Une erreur est survenue, réessayez plus tard.');
+  }
 });
 
 /* ====== Mes Photos ====== */
