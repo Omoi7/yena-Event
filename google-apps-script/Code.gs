@@ -77,6 +77,30 @@ const OWNER_EMAIL = 'yena.event7@gmail.com';
 const SITE_URL = 'https://omoi7.github.io/yena-Event/';
 const GOOGLE_REVIEW_LINK = 'https://maps.app.goo.gl/5UB9AKGLjTxDrgbWA';
 
+// Avis Google réels affichés sur le site (section "Avis") via l'API Google
+// Places : nécessite deux propriétés du script (PropertiesService), en plus
+// de ADMIN_KEY :
+//   - GOOGLE_PLACES_API_KEY : clé API Google Cloud (API "Places API" activée)
+//   - GOOGLE_PLACE_ID       : identifiant de la fiche Google Yena Event
+// Tant qu'elles ne sont pas configurées, le site utilise des avis d'exemple
+// à la place (aucune erreur, dégradation silencieuse). Étapes de mise en
+// place :
+//   1. Sur https://console.cloud.google.com, créez un projet (ou réutilisez-
+//      en un existant), puis "API et services" > "Bibliothèque" > cherchez
+//      "Places API" > Activer.
+//   2. "API et services" > "Identifiants" > "Créer des identifiants" > "Clé
+//      API". Restreignez-la ensuite à "Places API" uniquement (onglet
+//      "Restrictions relatives aux API").
+//   3. Trouvez l'identifiant de la fiche Google Yena Event avec l'outil
+//      officiel : https://developers.google.com/maps/documentation/places/web-service/place-id
+//      (chercher "Yena Event" sur la carte, copier le Place ID affiché).
+//   4. Dans l'éditeur Apps Script : ⚙️ Paramètres du projet > Propriétés du
+//      script > ajoutez GOOGLE_PLACES_API_KEY et GOOGLE_PLACE_ID avec les
+//      valeurs obtenues ci-dessus.
+// La Places API a un usage payant au-delà d'un crédit mensuel gratuit
+// généreux de Google Cloud ; les avis sont mis en cache 6h côté script pour
+// limiter le nombre d'appels facturables.
+
 // Nombre de jours après la date de l'évènement avant l'envoi de la demande d'avis.
 const DELAI_AVIS_JOURS = 2;
 
@@ -399,6 +423,54 @@ function handleGalleryPublic_() {
   return jsonOut_({ ok: true, images });
 }
 
+/**
+ * Avis Google réels de la fiche Yena Event (API Places), mis en cache 6h
+ * pour limiter les appels facturables. Renvoie { ok: false } si
+ * GOOGLE_PLACES_API_KEY / GOOGLE_PLACE_ID ne sont pas configurées — le site
+ * bascule alors silencieusement sur des avis d'exemple (voir en tête de
+ * fichier pour la marche à suivre).
+ */
+function handleGoogleReviewsPublic_() {
+  const props = PropertiesService.getScriptProperties();
+  const apiKey = props.getProperty('GOOGLE_PLACES_API_KEY');
+  const placeId = props.getProperty('GOOGLE_PLACE_ID');
+  if (!apiKey || !placeId) return jsonOut_({ ok: false, error: 'not_configured' });
+
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'googleReviews';
+  const cached = cache.get(cacheKey);
+  if (cached) return jsonOut_(JSON.parse(cached));
+
+  try {
+    const url = 'https://maps.googleapis.com/maps/api/place/details/json'
+      + `?place_id=${encodeURIComponent(placeId)}`
+      + '&fields=rating,user_ratings_total,reviews'
+      + '&language=fr'
+      + `&key=${encodeURIComponent(apiKey)}`;
+    const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    const json = JSON.parse(res.getContentText());
+    if (json.status !== 'OK' || !json.result) {
+      return jsonOut_({ ok: false, error: 'places_error', message: json.status });
+    }
+    const result = {
+      ok: true,
+      rating: json.result.rating || null,
+      totalReviews: json.result.user_ratings_total || null,
+      reviewLink: GOOGLE_REVIEW_LINK,
+      reviews: (json.result.reviews || []).map(r => ({
+        author: r.author_name || '',
+        rating: r.rating || 5,
+        text: r.text || '',
+        relativeTime: r.relative_time_description || '',
+      })),
+    };
+    cache.put(cacheKey, JSON.stringify(result), 21600); // 6h
+    return jsonOut_(result);
+  } catch (err) {
+    return jsonOut_({ ok: false, error: 'server_error', message: String(err) });
+  }
+}
+
 function formatDateForJson_(v) {
   if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
   return v || '';
@@ -617,6 +689,7 @@ function doGet(e) {
   try {
     if (e.parameter.action === 'unsubscribe') return handleUnsubscribe_(e);
     if (e.parameter.action === 'gallery') return handleGalleryPublic_();
+    if (e.parameter.action === 'googleReviews') return handleGoogleReviewsPublic_();
 
     const ref = (e.parameter.ref || '').trim();
     const email = (e.parameter.email || '').trim().toLowerCase();

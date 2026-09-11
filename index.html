@@ -20,7 +20,7 @@
 <header class="site-header" id="siteHeader">
   <div class="container header-inner">
     <a href="#accueil" class="logo">
-      <img src="assets/logo-block.png" alt="Yena Event" class="logo-block-img">
+      <img src="assets/logo-block.png" alt="Yena Event" class="logo-block-img" width="357" height="400">
     </a>
     <nav class="main-nav" id="mainNav">
       <a href="#accueil">Accueil</a>
@@ -289,17 +289,17 @@
             <div class="form-grid">
               <div class="field">
                 <label for="fullName">Nom complet *</label>
-                <input type="text" id="fullName" name="fullName" placeholder="Prénom Nom" required>
+                <input type="text" id="fullName" name="fullName" placeholder="Prénom Nom" autocomplete="name" required>
                 <p class="field-error" id="err-fullName"></p>
               </div>
               <div class="field">
                 <label for="email">Email *</label>
-                <input type="email" id="email" name="email" placeholder="vous@exemple.com" required>
+                <input type="email" id="email" name="email" placeholder="vous@exemple.com" autocomplete="email" required>
                 <p class="field-error" id="err-email"></p>
               </div>
               <div class="field">
                 <label for="phone">Téléphone *</label>
-                <input type="tel" id="phone" name="phone" placeholder="06 00 00 00 00" required>
+                <input type="tel" id="phone" name="phone" placeholder="06 00 00 00 00" autocomplete="tel" required>
                 <p class="field-error" id="err-phone"></p>
               </div>
               <div class="field field-full">
@@ -362,7 +362,7 @@
           </div>
           <div class="field">
             <label for="photosEmail">Email utilisé pour la réservation *</label>
-            <input type="email" id="photosEmail" placeholder="vous@exemple.com" required>
+            <input type="email" id="photosEmail" placeholder="vous@exemple.com" autocomplete="email" required>
           </div>
           <button type="submit" class="btn btn-primary" id="photosSubmitBtn">Voir mes photos</button>
         </form>
@@ -408,11 +408,11 @@
         </div>
         <div class="field">
           <label for="cName">Nom *</label>
-          <input type="text" id="cName" required>
+          <input type="text" id="cName" autocomplete="name" required>
         </div>
         <div class="field">
           <label for="cEmail">Email *</label>
-          <input type="email" id="cEmail" required>
+          <input type="email" id="cEmail" autocomplete="email" required>
         </div>
         <div class="field">
           <label for="cMsg">Message *</label>
@@ -429,7 +429,7 @@
   <div class="container footer-grid">
     <div>
       <a href="#accueil" class="logo footer-logo">
-        <img src="assets/logo-block.png" alt="Yena Event" class="logo-block-img">
+        <img src="assets/logo-block.png" alt="Yena Event" class="logo-block-img" width="357" height="400">
       </a>
       <p>Votre agence évènementielle pour des instants inoubliables.</p>
     </div>
@@ -455,7 +455,7 @@
           <label for="hpNewsletter">Ne pas remplir ce champ</label>
           <input type="text" id="hpNewsletter" tabindex="-1" autocomplete="off">
         </div>
-        <input type="email" id="newsletterEmail" placeholder="Votre email" required>
+        <input type="email" id="newsletterEmail" placeholder="Votre email" autocomplete="email" required>
         <button type="submit">OK</button>
       </form>
     </div>

@@ -183,36 +183,110 @@ async function loadGallery_() {
 loadGallery_();
 
 /* ====== Testimonials ====== */
-const TESTIMONIALS = [
-  { text: "Yena Event a organisé notre mariage de A à Z. Tout était parfait, nous n'avons eu qu'à profiter de la journée.", author: "Camille & Antoine", role: "Mariage, 120 invités" },
-  { text: "Un professionnalisme remarquable pour notre séminaire d'entreprise. Logistique impeccable et équipe très réactive.", author: "Sophie Marchand", role: "Directrice RH, Nova Corp" },
-  { text: "Le baptême de notre fille était magnifique, chaque détail avait été pensé. Merci à toute l'équipe !", author: "Julien Petit", role: "Baptême" },
-  { text: "Notre gala caritatif a été un franc succès grâce à leur créativité et leur sens de l'organisation.", author: "Fondation Lumière", role: "Gala annuel" },
+// Avis d'exemple utilisés tant que les avis Google réels ne sont pas
+// configurés côté backend (voir GOOGLE_PLACES_API_KEY / GOOGLE_PLACE_ID
+// dans google-apps-script/Code.gs) — aucune erreur visible en attendant.
+const TESTIMONIALS_PLACEHOLDER = [
+  { text: "Yena Event a organisé notre mariage de A à Z. Tout était parfait, nous n'avons eu qu'à profiter de la journée.", author: "Camille & Antoine", role: "Mariage, 120 invités", rating: 5 },
+  { text: "Un professionnalisme remarquable pour notre séminaire d'entreprise. Logistique impeccable et équipe très réactive.", author: "Sophie Marchand", role: "Directrice RH, Nova Corp", rating: 5 },
+  { text: "Le baptême de notre fille était magnifique, chaque détail avait été pensé. Merci à toute l'équipe !", author: "Julien Petit", role: "Baptême", rating: 5 },
+  { text: "Notre gala caritatif a été un franc succès grâce à leur créativité et leur sens de l'organisation.", author: "Fondation Lumière", role: "Gala annuel", rating: 5 },
 ];
+
+const testimonialSlider = document.querySelector('.testimonial-slider');
 const track = document.getElementById('testimonialTrack');
 const dotsWrap = document.getElementById('testimonialDots');
-TESTIMONIALS.forEach((t, i) => {
-  const card = document.createElement('div');
-  card.className = 'testimonial-card';
-  card.innerHTML = `
-    <div class="stars">★★★★★</div>
-    <p>"${t.text}"</p>
-    <strong>${t.author}</strong>
-    <span>${t.role}</span>
-  `;
-  track.appendChild(card);
-  const dot = document.createElement('button');
-  if (i === 0) dot.classList.add('active');
-  dot.addEventListener('click', () => goToSlide(i));
-  dotsWrap.appendChild(dot);
-});
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 let slideIndex = 0;
+let testimonialsCount = 0;
+let testimonialTimer = null;
+
+function starsHtml_(rating) {
+  const n = Math.max(0, Math.min(5, Math.round(Number(rating) || 5)));
+  return '★★★★★'.slice(0, n) + '☆☆☆☆☆'.slice(0, 5 - n);
+}
+
 function goToSlide(i) {
-  slideIndex = (i + TESTIMONIALS.length) % TESTIMONIALS.length;
+  if (!testimonialsCount) return;
+  slideIndex = (i + testimonialsCount) % testimonialsCount;
   track.style.transform = `translateX(-${slideIndex * 100}%)`;
   dotsWrap.querySelectorAll('button').forEach((d, idx) => d.classList.toggle('active', idx === slideIndex));
 }
-setInterval(() => goToSlide(slideIndex + 1), 6000);
+
+function startTestimonialAutoplay_() {
+  clearInterval(testimonialTimer);
+  // On respecte le réglage "réduire les animations" du visiteur, et on ne
+  // fait tourner un carrousel que s'il y a effectivement plusieurs avis.
+  if (prefersReducedMotion || testimonialsCount < 2) return;
+  testimonialTimer = setInterval(() => goToSlide(slideIndex + 1), 6000);
+}
+function stopTestimonialAutoplay_() {
+  clearInterval(testimonialTimer);
+}
+if (testimonialSlider) {
+  // Pause au survol et au focus clavier, pour laisser le temps de lire.
+  testimonialSlider.addEventListener('mouseenter', stopTestimonialAutoplay_);
+  testimonialSlider.addEventListener('mouseleave', startTestimonialAutoplay_);
+  testimonialSlider.addEventListener('focusin', stopTestimonialAutoplay_);
+  testimonialSlider.addEventListener('focusout', startTestimonialAutoplay_);
+}
+
+function renderTestimonials_(items, meta) {
+  track.innerHTML = '';
+  dotsWrap.innerHTML = '';
+  document.getElementById('testimonialsSummary')?.remove();
+
+  if (meta && meta.rating && testimonialSlider) {
+    const summary = document.createElement('p');
+    summary.className = 'testimonial-summary';
+    summary.id = 'testimonialsSummary';
+    summary.innerHTML = `<strong>${escapeHtml_(meta.rating)}</strong> ★ sur ${escapeHtml_(meta.totalReviews || 0)} avis Google` +
+      (meta.reviewLink ? ` · <a href="${escapeHtml_(meta.reviewLink)}" target="_blank" rel="noopener">Voir tous les avis</a>` : '');
+    testimonialSlider.parentNode.insertBefore(summary, testimonialSlider);
+  }
+
+  testimonialsCount = items.length;
+  items.forEach((t, i) => {
+    const card = document.createElement('div');
+    card.className = 'testimonial-card';
+    card.innerHTML = `
+      <div class="stars">${starsHtml_(t.rating)}</div>
+      <p>"${escapeHtml_(t.text)}"</p>
+      <strong>${escapeHtml_(t.author)}</strong>
+      <span>${escapeHtml_(t.role)}</span>
+    `;
+    track.appendChild(card);
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.setAttribute('aria-label', `Avis ${i + 1} sur ${items.length}`);
+    if (i === 0) dot.classList.add('active');
+    dot.addEventListener('click', () => { goToSlide(i); startTestimonialAutoplay_(); });
+    dotsWrap.appendChild(dot);
+  });
+
+  goToSlide(0);
+  startTestimonialAutoplay_();
+}
+
+async function loadTestimonials_() {
+  const url = window.YENA_CONFIG && window.YENA_CONFIG.APPS_SCRIPT_URL;
+  if (url) {
+    try {
+      const res = await fetch(`${url}?action=googleReviews`);
+      const data = await res.json();
+      if (data.ok && data.reviews && data.reviews.length) {
+        renderTestimonials_(
+          data.reviews.map(r => ({ text: r.text, author: r.author, role: r.relativeTime || 'Avis Google', rating: r.rating })),
+          { rating: data.rating, totalReviews: data.totalReviews, reviewLink: data.reviewLink }
+        );
+        return;
+      }
+    } catch (err) { /* on retombe sur les avis d'exemple */ }
+  }
+  renderTestimonials_(TESTIMONIALS_PLACEHOLDER);
+}
+loadTestimonials_();
 
 /* ====== FAQ ====== */
 const FAQ = [
@@ -223,12 +297,12 @@ const FAQ = [
   { q: "Puis-je modifier ma demande après l'avoir envoyée ?", a: "Bien sûr, notre équipe vous recontacte pour affiner chaque détail avant la validation finale du devis." },
 ];
 const accordion = document.getElementById('accordion');
-FAQ.forEach(item => {
+FAQ.forEach((item, i) => {
   const el = document.createElement('div');
   el.className = 'accordion-item';
   el.innerHTML = `
-    <button type="button" class="accordion-btn">${item.q}<span class="plus">+</span></button>
-    <div class="accordion-panel"><p>${item.a}</p></div>
+    <button type="button" class="accordion-btn" id="faqBtn${i}" aria-expanded="false" aria-controls="faqPanel${i}">${item.q}<span class="plus">+</span></button>
+    <div class="accordion-panel" id="faqPanel${i}" role="region" aria-labelledby="faqBtn${i}"><p>${item.a}</p></div>
   `;
   accordion.appendChild(el);
   const btn = el.querySelector('.accordion-btn');
@@ -238,10 +312,12 @@ FAQ.forEach(item => {
     accordion.querySelectorAll('.accordion-item').forEach(other => {
       other.classList.remove('open');
       other.querySelector('.accordion-panel').style.maxHeight = null;
+      other.querySelector('.accordion-btn').setAttribute('aria-expanded', 'false');
     });
     if (!isOpen) {
       el.classList.add('open');
       panel.style.maxHeight = panel.scrollHeight + 'px';
+      btn.setAttribute('aria-expanded', 'true');
     }
   });
 });
@@ -428,7 +504,9 @@ bookingForm.addEventListener('submit', async (e) => {
   try {
     const existing = JSON.parse(localStorage.getItem('yena_bookings') || '[]');
     existing.push(booking);
-    localStorage.setItem('yena_bookings', JSON.stringify(existing));
+    // On ne garde que les 20 dernières demandes de cet appareil, pour éviter
+    // une accumulation indéfinie de données personnelles dans le navigateur.
+    localStorage.setItem('yena_bookings', JSON.stringify(existing.slice(-20)));
   } catch (err) { /* localStorage indisponible : on continue sans bloquer */ }
 
   const backendResult = await sendToBackend_(booking);
