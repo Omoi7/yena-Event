@@ -62,7 +62,10 @@
     <div class="admin-panel">
       <div class="admin-panel-head">
         <h2>Réservations</h2>
-        <button type="button" class="btn btn-outline btn-sm" id="refreshBtn">↻ Actualiser</button>
+        <div class="admin-panel-actions">
+          <button type="button" class="btn btn-outline btn-sm" id="exportCsvBtn">⬇️ Exporter CSV</button>
+          <button type="button" class="btn btn-outline btn-sm" id="refreshBtn">↻ Actualiser</button>
+        </div>
       </div>
       <div class="admin-table-wrap">
         <table class="admin-table" id="bookingsTable">
@@ -73,12 +76,13 @@
               <th>Prestation</th>
               <th>Date</th>
               <th>Contact</th>
+              <th>Suivi</th>
               <th>Statut photos</th>
               <th>Action</th>
             </tr>
           </thead>
           <tbody id="bookingsBody">
-            <tr><td colspan="7" class="admin-empty">Chargement…</td></tr>
+            <tr><td colspan="8" class="admin-empty">Chargement…</td></tr>
           </tbody>
         </table>
       </div>
@@ -102,6 +106,33 @@
           <button type="submit" class="btn btn-primary" id="nlSendBtn">Envoyer maintenant</button>
         </div>
       </form>
+    </div>
+
+    <div class="admin-panel">
+      <div class="admin-panel-head">
+        <h2>Galerie du site</h2>
+      </div>
+      <p class="admin-newsletter-hint" style="margin-bottom:16px;">
+        Ajoutez ici des photos dont vous avez les droits de diffusion publique
+        (à distinguer des dossiers photos privés de vos clients). Dans Drive,
+        partagez l'image avec l'option « Tous les utilisateurs disposant du
+        lien peuvent consulter », puis collez ce lien ici.
+      </p>
+      <form id="galleryAddForm" class="admin-newsletter-form">
+        <div class="field">
+          <label for="galTitre">Titre / légende</label>
+          <input type="text" id="galTitre" placeholder="Ex : Mariage au domaine des Roses" required>
+        </div>
+        <div class="field">
+          <label for="galLien">Lien de partage Drive de l'image</label>
+          <input type="text" id="galLien" placeholder="https://drive.google.com/file/d/.../view" required>
+        </div>
+        <div class="admin-newsletter-actions">
+          <span></span>
+          <button type="submit" class="btn btn-primary" id="galAddBtn">Ajouter à la galerie</button>
+        </div>
+      </form>
+      <div class="admin-gallery-grid" id="galleryGridAdmin"></div>
     </div>
 
   </section>

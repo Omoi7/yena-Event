@@ -129,7 +129,8 @@ serviceOptions.addEventListener('click', (e) => {
 });
 
 /* ====== Gallery ====== */
-const GALLERY = [
+// Contenu de repli tant qu'aucune photo n'a été ajoutée depuis la page admin.
+const GALLERY_PLACEHOLDER = [
   { label: 'Mariage au domaine des Roses', tall: true },
   { label: 'Anniversaire thème doré' },
   { label: 'Séminaire corporate' },
@@ -139,15 +140,40 @@ const GALLERY = [
   { label: 'Décoration florale' },
   { label: 'Soirée VIP' },
 ];
-const palette = ['var(--brown)', 'var(--brown-light)', 'var(--gold)', 'var(--brown-950)'];
+const galleryPalette = ['var(--brown)', 'var(--brown-light)', 'var(--gold)', 'var(--brown-950)'];
 const galleryGrid = document.getElementById('galleryGrid');
-GALLERY.forEach((g, i) => {
-  const div = document.createElement('div');
-  div.className = 'gallery-item' + (g.tall ? ' tall' : '');
-  div.style.background = `linear-gradient(160deg, ${palette[i % palette.length]}, var(--beige))`;
-  div.innerHTML = `<span>${g.label}</span>`;
-  galleryGrid.appendChild(div);
-});
+
+function renderGalleryPlaceholder_() {
+  galleryGrid.innerHTML = '';
+  GALLERY_PLACEHOLDER.forEach((g, i) => {
+    const div = document.createElement('div');
+    div.className = 'gallery-item' + (g.tall ? ' tall' : '');
+    div.style.background = `linear-gradient(160deg, ${galleryPalette[i % galleryPalette.length]}, var(--beige))`;
+    div.innerHTML = `<span>${g.label}</span>`;
+    galleryGrid.appendChild(div);
+  });
+}
+
+async function loadGallery_() {
+  const url = window.YENA_CONFIG && window.YENA_CONFIG.APPS_SCRIPT_URL;
+  if (!url) { renderGalleryPlaceholder_(); return; }
+  try {
+    const res = await fetch(`${url}?action=gallery`);
+    const data = await res.json();
+    if (!data.ok || !data.images.length) { renderGalleryPlaceholder_(); return; }
+    galleryGrid.innerHTML = '';
+    data.images.forEach((img, i) => {
+      const div = document.createElement('div');
+      div.className = 'gallery-item' + (i % 5 === 0 ? ' tall' : '');
+      div.innerHTML = `<img src="${img.url}" alt="${img.titre}" loading="lazy"><span>${img.titre}</span>`;
+      galleryGrid.appendChild(div);
+    });
+  } catch (err) {
+    renderGalleryPlaceholder_();
+  }
+}
+
+loadGallery_();
 
 /* ====== Testimonials ====== */
 const TESTIMONIALS = [
@@ -469,6 +495,33 @@ document.getElementById('newRequestBtn').addEventListener('click', () => {
 
 renderStep();
 
+/* ====== Vérification de disponibilité ====== */
+const availabilityHint = document.getElementById('availabilityHint');
+let availabilityCheckToken = 0;
+
+document.getElementById('eventDate').addEventListener('change', async (e) => {
+  const date = e.target.value;
+  const url = window.YENA_CONFIG && window.YENA_CONFIG.APPS_SCRIPT_URL;
+  if (!date || !url) { availabilityHint.hidden = true; return; }
+
+  const token = ++availabilityCheckToken;
+  availabilityHint.hidden = false;
+  availabilityHint.className = 'field-hint';
+  availabilityHint.textContent = 'Vérification de la disponibilité…';
+
+  const result = await sendToBackend_({ type: 'checkAvailability', date });
+  if (token !== availabilityCheckToken) return; // une saisie plus récente a pris le dessus
+
+  if (!result.ok) { availabilityHint.hidden = true; return; }
+  if (result.taken) {
+    availabilityHint.className = 'field-hint taken';
+    availabilityHint.textContent = '⚠️ Cette date est déjà réservée — contactez-nous pour vérifier d\'autres créneaux.';
+  } else {
+    availabilityHint.className = 'field-hint free';
+    availabilityHint.textContent = '✓ Cette date est disponible.';
+  }
+});
+
 /* ====== Contact form ====== */
 document.getElementById('contactForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -561,17 +614,22 @@ photosForm.addEventListener('submit', async (e) => {
         `<h4>Aucune réservation trouvée</h4><p>Vérifiez votre référence et l'email utilisé lors de la réservation, ou contactez-nous directement.</p>`,
         'error'
       );
-    } else if (data.status === 'ready') {
-      showPhotosResult_(
-        `<h4>📸 Vos photos sont prêtes !</h4><p>${data.service || ''} — ${data.fullName || ''}</p>` +
-        `<a href="${data.driveFolderUrl}" target="_blank" rel="noopener" class="btn btn-primary">Ouvrir mon dossier photos</a>`,
-        'ready'
-      );
     } else {
-      showPhotosResult_(
-        `<h4>Vos photos arrivent bientôt</h4><p>Votre réservation (${data.service || ''}) est bien enregistrée. Yena Event dépose vos photos après l'évènement : revenez ensuite avec la même référence pour les consulter.</p>`,
-        'pending'
-      );
+      const statutBadge = `<p class="booking-status-badge">Statut de votre dossier : <strong>${data.statutReservation || 'Nouvelle demande'}</strong></p>`;
+      if (data.status === 'ready') {
+        showPhotosResult_(
+          statutBadge +
+          `<h4>📸 Vos photos sont prêtes !</h4><p>${data.service || ''} — ${data.fullName || ''}</p>` +
+          `<a href="${data.driveFolderUrl}" target="_blank" rel="noopener" class="btn btn-primary">Ouvrir mon dossier photos</a>`,
+          'ready'
+        );
+      } else {
+        showPhotosResult_(
+          statutBadge +
+          `<h4>Vos photos arrivent bientôt</h4><p>Votre réservation (${data.service || ''}) est bien enregistrée. Yena Event dépose vos photos après l'évènement : revenez ensuite avec la même référence pour les consulter.</p>`,
+          'pending'
+        );
+      }
     }
   } catch (err) {
     showPhotosResult_(`<h4>Erreur de connexion</h4><p>Impossible de contacter le service pour le moment, réessayez plus tard.</p>`, 'error');

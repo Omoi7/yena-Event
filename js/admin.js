@@ -38,6 +38,7 @@ const loginError = document.getElementById('loginError');
 
 let adminKey = null;
 let latestBookings = [];
+let statutsReservation = ['Nouvelle demande', 'Devis envoyé', 'Confirmé', 'Terminé'];
 
 function showLogin_(message) {
   adminKey = null;
@@ -53,6 +54,7 @@ function showDashboard_() {
   dashboardView.hidden = false;
   logoutBtn.hidden = false;
   loadBookings_();
+  loadGalleryAdmin_();
 }
 
 async function tryLogin_(key) {
@@ -101,7 +103,7 @@ function formatDateFr_(iso) {
 
 function renderBookings_() {
   if (!latestBookings.length) {
-    bookingsBody.innerHTML = '<tr><td colspan="7" class="admin-empty">Aucune réservation pour le moment.</td></tr>';
+    bookingsBody.innerHTML = '<tr><td colspan="8" class="admin-empty">Aucune réservation pour le moment.</td></tr>';
     return;
   }
   bookingsBody.innerHTML = latestBookings.map(b => {
@@ -112,6 +114,8 @@ function renderBookings_() {
     const actionCell = ready
       ? '<span class="status-pill ready">✓ Prêt</span>'
       : `<button type="button" class="btn-tiny" data-ref="${b.ref}">Marquer prêtes</button>`;
+    const statutActuel = b.statutReservation || 'Nouvelle demande';
+    const options = statutsReservation.map(s => `<option value="${s}" ${s === statutActuel ? 'selected' : ''}>${s}</option>`).join('');
     return `
       <tr>
         <td>${b.ref}</td>
@@ -119,6 +123,7 @@ function renderBookings_() {
         <td>${b.service || '—'}</td>
         <td>${formatDateFr_(b.eventDate)}</td>
         <td>${b.email || ''}<br><span style="color:var(--text-soft)">${b.phone || ''}</span></td>
+        <td><select class="status-select" data-ref="${b.ref}">${options}</select></td>
         <td><span class="status-pill ${ready ? 'ready' : 'pending'}">${b.statutPhotos}</span><br>${driveLink}</td>
         <td>${actionCell}</td>
       </tr>
@@ -127,16 +132,17 @@ function renderBookings_() {
 }
 
 async function loadBookings_() {
-  bookingsBody.innerHTML = '<tr><td colspan="7" class="admin-empty">Chargement…</td></tr>';
+  bookingsBody.innerHTML = '<tr><td colspan="8" class="admin-empty">Chargement…</td></tr>';
   const result = await callApi_({ type: 'adminList', adminKey });
 
   if (!result.ok) {
     if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
-    bookingsBody.innerHTML = '<tr><td colspan="7" class="admin-empty">Erreur de chargement. Réessayez.</td></tr>';
+    bookingsBody.innerHTML = '<tr><td colspan="8" class="admin-empty">Erreur de chargement. Réessayez.</td></tr>';
     return;
   }
 
   latestBookings = result.bookings || [];
+  if (result.statutsReservation && result.statutsReservation.length) statutsReservation = result.statutsReservation;
   document.getElementById('statBookings').textContent = latestBookings.length;
   document.getElementById('statPending').textContent = latestBookings.filter(b => b.statutPhotos !== 'Prêt').length;
   document.getElementById('statSubscribers').textContent = result.abonnesCount || 0;
@@ -168,6 +174,42 @@ bookingsBody.addEventListener('click', async (e) => {
   document.getElementById('statPending').textContent = latestBookings.filter(b => b.statutPhotos !== 'Prêt').length;
 });
 
+bookingsBody.addEventListener('change', async (e) => {
+  const select = e.target.closest('select[data-ref]');
+  if (!select) return;
+  const ref = select.dataset.ref;
+  const statut = select.value;
+  select.disabled = true;
+
+  const result = await callApi_({ type: 'adminUpdateBookingStatus', adminKey, ref, statut });
+  select.disabled = false;
+  if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
+  if (!result.ok) { showToast('Erreur, réessayez.'); return; }
+
+  const booking = latestBookings.find(b => b.ref === ref);
+  if (booking) booking.statutReservation = statut;
+  showToast(`Statut mis à jour pour ${ref}.`);
+});
+
+/* ====== Export CSV ====== */
+document.getElementById('exportCsvBtn').addEventListener('click', () => {
+  if (!latestBookings.length) { showToast('Aucune réservation à exporter.'); return; }
+  const cols = ['ref', 'fullName', 'email', 'phone', 'service', 'eventDate', 'guests', 'location', 'statutReservation', 'statutPhotos'];
+  const headerRow = ['Référence', 'Nom', 'Email', 'Téléphone', 'Prestation', 'Date évènement', 'Invités', 'Lieu', 'Statut réservation', 'Statut photos'];
+  const escapeCsv = (v) => `"${String(v == null ? '' : v).replace(/"/g, '""')}"`;
+  const rows = [headerRow, ...latestBookings.map(b => cols.map(c => escapeCsv(b[c])))];
+  const csv = '﻿' + rows.map(r => r.join(';')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `yena-event-reservations-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+
 /* ====== Newsletter ====== */
 document.getElementById('newsletterAdminForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -194,6 +236,69 @@ document.getElementById('newsletterAdminForm').addEventListener('submit', async 
   }
   showToast(`Newsletter envoyée à ${result.count} destinataire(s) !`);
   e.target.reset();
+});
+
+/* ====== Galerie ====== */
+const galleryGridAdmin = document.getElementById('galleryGridAdmin');
+
+async function loadGalleryAdmin_() {
+  galleryGridAdmin.innerHTML = '<p class="admin-empty">Chargement…</p>';
+  const url = getApiUrl_();
+  if (!url) { galleryGridAdmin.innerHTML = ''; return; }
+  try {
+    const res = await fetch(`${url}?action=gallery`);
+    const data = await res.json();
+    if (!data.ok || !data.images.length) {
+      galleryGridAdmin.innerHTML = '<p class="admin-empty">Aucune image pour le moment.</p>';
+      return;
+    }
+    galleryGridAdmin.innerHTML = data.images.map(img => `
+      <div class="admin-gallery-item">
+        <img src="${img.url}" alt="${img.titre}" loading="lazy">
+        <span class="gal-caption">${img.titre}</span>
+        <button type="button" class="gal-delete" data-row="${img.rowIndex}" title="Supprimer">✕</button>
+      </div>
+    `).join('');
+  } catch (err) {
+    galleryGridAdmin.innerHTML = '<p class="admin-empty">Erreur de chargement.</p>';
+  }
+}
+
+document.getElementById('galleryAddForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const titre = document.getElementById('galTitre').value.trim();
+  const lien = document.getElementById('galLien').value.trim();
+  if (!titre || !lien) return;
+
+  const btn = document.getElementById('galAddBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Ajout…';
+
+  const result = await callApi_({ type: 'adminAddGalleryImage', adminKey, titre, lien });
+
+  btn.disabled = false;
+  btn.textContent = 'Ajouter à la galerie';
+
+  if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
+  if (!result.ok) { showToast("Erreur lors de l'ajout, vérifiez le lien."); return; }
+
+  showToast('Image ajoutée à la galerie !');
+  e.target.reset();
+  loadGalleryAdmin_();
+});
+
+galleryGridAdmin.addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-row]');
+  if (!btn) return;
+  if (!confirm('Supprimer cette image de la galerie ?')) return;
+  btn.disabled = true;
+
+  const result = await callApi_({ type: 'adminDeleteGalleryImage', adminKey, rowIndex: Number(btn.dataset.row) });
+  if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
+  if (!result.ok) { showToast('Erreur, réessayez.'); btn.disabled = false; return; }
+
+  showToast('Image supprimée.');
+  loadGalleryAdmin_();
 });
 
 /* ====== Boot ====== */

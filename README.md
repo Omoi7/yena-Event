@@ -11,12 +11,15 @@ Site vitrine interactif pour l'agence évènementielle Yena Event (mariages, ann
 - Carrousel de témoignages clients
 - FAQ en accordéon
 - **Formulaire de réservation en 4 étapes** permettant à un client de choisir une prestation, renseigner les détails de son évènement, ses coordonnées, puis **valider sa prestation en ligne** avec génération d'une référence de demande
+- **Vérification de disponibilité en direct** : la date choisie est comparée aux évènements déjà confirmés, avec message immédiat si elle est prise
 - **Ajout au calendrier en un clic** (Google Calendar + fichier .ics) dès la validation de la demande
-- **Espace « Mes photos »** : chaque client retrouve les photos de son évènement (référence + email) dans le dossier Google Drive dédié créé automatiquement pour son évènement
-- **Emails automatiques** : confirmation au client et notification à Yena à chaque réservation, message de contact envoyé directement par email, et **demande d'avis Google automatique** envoyée au client 2 jours après son évènement
+- **Espace « Mes photos »** : chaque client retrouve le statut de son dossier et les photos de son évènement (référence + email) dans le dossier Google Drive dédié créé automatiquement
+- **Emails automatiques** : confirmation au client et notification à Yena à chaque réservation, message de contact envoyé directement par email, **rappel au client 7 jours avant son évènement confirmé**, et **demande d'avis Google automatique** 2 jours après
 - **Newsletter** : Yena écrit son texte (depuis le Sheet ou la page admin), elle part automatiquement à tous les anciens clients et aux inscrits du site (lien de désinscription inclus)
-- **Page d'administration** (`admin.html`, protégée par mot de passe) : gérer les réservations, activer l'accès aux photos et envoyer la newsletter sans jamais ouvrir le Google Sheet
-- Formulaire de contact (envoyé par email à Yena) et inscription newsletter
+- **Section Tarifs** avec forfaits indicatifs (contenu exemple à personnaliser)
+- **Galerie publique gérable depuis l'admin**, distincte des dossiers photos privés des clients
+- **Page d'administration** (`admin.html`, protégée par mot de passe) : réservations avec suivi de statut, activation de l'accès aux photos, gestion de la galerie, envoi de newsletter, export CSV — sans jamais ouvrir le Google Sheet
+- Bouton WhatsApp flottant, formulaire de contact (envoyé par email à Yena) et inscription newsletter
 - Barre de progression de lecture, copie de référence en un clic, focus clavier accessible
 - Palette de marque : marron `#52311b` / beige `#e6d6bc`
 
@@ -60,6 +63,8 @@ action manuelle** :
 | Un visiteur envoie le formulaire de contact | **Email envoyé directement à Yena**, avec réponse possible en direct au client (reply-to) |
 | 2 jours après la date d'un évènement | **Email automatique envoyé au client** pour lui demander de laisser un avis Google (lien vers [la fiche Yena Event](https://maps.app.goo.gl/5UB9AKGLjTxDrgbWA)) — envoyé une seule fois par réservation |
 | Yena écrit une newsletter et passe son Statut à `Envoyer maintenant` | **Envoyée automatiquement** à tous les anciens clients et abonnés du site, le lendemain matin au plus tard |
+| 7 jours avant un évènement dont le « Statut réservation » est `Confirmé` | **Email de rappel automatique envoyé au client**, une seule fois |
+| Un visiteur choisit une date sur le formulaire | Le site interroge le Sheet en direct et signale si la date est déjà prise par une réservation `Confirmé` |
 | Yena dépose les photos et passe une ligne à `Prêt` (colonne « Statut photos » du Sheet) | Le client peut voir/ouvrir son dossier photo depuis l'espace « Mes photos » du site |
 
 Concrètement, une fois cette automatisation en place, il n'y a plus que deux
@@ -75,9 +80,21 @@ Google Sheet — voir la section Administration ci-dessous.
 Une page dédiée, protégée par mot de passe, permet à Yena de piloter le site
 sans jamais ouvrir le Google Sheet :
 
-- **Tableau des réservations** : toutes les demandes, avec un bouton
-  **« Marquer prêtes »** pour activer l'accès aux photos d'un client en un
-  clic (équivalent à passer la colonne « Statut photos » à `Prêt`).
+- **Tableau des réservations** : toutes les demandes, avec :
+  - un menu déroulant **Suivi** pour faire avancer le statut de la
+    réservation (`Nouvelle demande` → `Devis envoyé` → `Confirmé` →
+    `Terminé`) — c'est ce statut `Confirmé` qui déclenche la vérification
+    de disponibilité et le rappel J-7 côté site ;
+  - un bouton **« Marquer prêtes »** pour activer l'accès aux photos d'un
+    client en un clic (équivalent à passer la colonne « Statut photos » à
+    `Prêt`) ;
+  - un bouton **« Exporter CSV »** pour télécharger toutes les réservations
+    (utilisable dans Excel/Google Sheets, ou pour une sauvegarde).
+- **Galerie du site** : ajoutez un lien de partage Drive (accès « Tous les
+  utilisateurs disposant du lien ») + un titre, l'image apparaît aussitôt
+  dans la section Galerie du site public. Bouton de suppression par image.
+  À utiliser uniquement pour des photos dont Yena a les droits de diffusion
+  publique — jamais les dossiers photos privés remis aux clients.
 - **Newsletter** : un champ Sujet + un champ Contenu, et un bouton
   **« Envoyer maintenant »** qui l'envoie immédiatement à tous les abonnés
   (avec confirmation avant l'envoi, puisque c'est irréversible).
@@ -171,3 +188,26 @@ Passez directement par script.new :
 Tant que `APPS_SCRIPT_URL` est vide, le site reste fonctionnel en mode
 dégradé (réservation en local, lien mailto manuel, pas de Calendar/Drive/emails
 automatiques, contact form silencieux côté Yena).
+
+## Contenus à personnaliser avant mise en ligne définitive
+
+- **Section Tarifs** (`index.html`, section `#tarifs`) : les 3 forfaits et
+  montants sont des exemples, à remplacer par les vrais tarifs.
+- **Bouton WhatsApp** (`index.html`, tout en bas) : numéro placeholder
+  `+33 6 00 00 00 00`, à remplacer par le vrai numéro WhatsApp.
+- Plus généralement, le téléphone, l'adresse et l'email affichés en plusieurs
+  endroits du site (`+33 6 00 00 00 00`, `12 rue des Fêtes`,
+  `contact@yena-event.fr`) sont encore des exemples d'origine — seule
+  l'adresse `yena.event7@gmail.com` utilisée par le backend est réelle.
+
+## Pistes envisagées mais non implémentées
+
+- **Paiement d'acompte en ligne (Stripe)** : volontairement mis de côté —
+  implique de vraies transactions, un compte Stripe à configurer, et des
+  décisions (montant, politique de remboursement) qui méritent une
+  discussion dédiée avant tout développement.
+- **Multi-langue (FR/EN) et SEO local avancé** : pistes identifiées, non
+  prioritaires pour l'instant.
+- **Vrais avis clients affichés sur le site** : les témoignages actuels
+  restent des exemples ; à remplacer une fois que de vrais avis Google
+  commenceront à arriver via l'email de demande d'avis automatique.

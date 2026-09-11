@@ -19,13 +19,22 @@
  *  - Une fois les photos déposées par Yena et le statut passé à "Prêt" dans
  *    le tableau, les clients peuvent retrouver leurs photos depuis le site
  *    en indiquant leur référence de réservation + leur email.
+ *  - Rappel automatique 7 jours avant un évènement CONFIRMÉ (colonne
+ *    "Statut réservation" = "Confirmé"), pour le client.
+ *  - Vérification de disponibilité en direct sur le formulaire du site : une
+ *    date déjà occupée par une réservation confirmée est signalée au client.
+ *  - Galerie publique du site alimentée depuis l'onglet "Galerie" du Sheet
+ *    (gérable directement depuis la page admin, distincte des dossiers
+ *    photos privés des clients).
  *  - Une page d'administration (admin.html) permet à Yena de faire tout ça
- *    (voir les réservations, marquer des photos prêtes, écrire et envoyer
- *    une newsletter) directement depuis le site, sans toucher au Sheet.
- *    Protégée par un mot de passe (ADMIN_KEY) qui doit être configuré dans
- *    les propriétés du script — voir ÉTAPE ADMIN ci-dessous. Ce mot de passe
- *    ne doit JAMAIS être écrit dans ce fichier ni commité sur GitHub (le
- *    dépôt est public) : il vit uniquement dans les propriétés du script.
+ *    (voir les réservations, changer leur statut de suivi, marquer des
+ *    photos prêtes, gérer la galerie, écrire et envoyer une newsletter,
+ *    exporter les réservations en CSV) directement depuis le site, sans
+ *    toucher au Sheet. Protégée par un mot de passe (ADMIN_KEY) qui doit
+ *    être configuré dans les propriétés du script — voir ÉTAPE ADMIN
+ *    ci-dessous. Ce mot de passe ne doit JAMAIS être écrit dans ce fichier
+ *    ni commité sur GitHub (le dépôt est public) : il vit uniquement dans
+ *    les propriétés du script.
  *
  * INSTALLATION / MISE À JOUR (connecté à yena.event7@gmail.com) :
  *  1. Allez sur https://script.google.com/home, ouvrez le projet
@@ -71,6 +80,12 @@ const GOOGLE_REVIEW_LINK = 'https://maps.app.goo.gl/5UB9AKGLjTxDrgbWA';
 // Nombre de jours après la date de l'évènement avant l'envoi de la demande d'avis.
 const DELAI_AVIS_JOURS = 2;
 
+// Nombre de jours avant la date de l'évènement pour l'envoi du rappel.
+const DELAI_RAPPEL_JOURS = 7;
+
+// Statuts possibles pour le suivi d'une réservation (colonne "Statut réservation").
+const STATUTS_RESERVATION = ['Nouvelle demande', 'Devis envoyé', 'Confirmé', 'Terminé'];
+
 // ID du dossier Drive "Événements" où sont déjà rangés tous les dossiers clients.
 const EVENTS_FOLDER_ID = '1TE3TYCJag1w4jG2-uyGnAdXBEhA3fAOd';
 
@@ -83,7 +98,7 @@ const HEADERS = [
   'Référence', 'Date de la demande', 'Prestation', 'Date évènement', 'Invités',
   'Lieu', 'Budget', 'Nom', 'Email', 'Téléphone', 'Message', 'Statut photos',
   'ID dossier Drive', 'Lien dossier Drive', 'ID évènement Calendar', 'Lien évènement Calendar',
-  'Avis demandé',
+  'Avis demandé', 'Statut réservation', 'Rappel envoyé',
 ];
 
 const COL = HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
@@ -95,6 +110,10 @@ const ACOL = ABONNES_HEADERS.reduce((acc, name, i) => { acc[name] = i; return ac
 const CAMPAGNES_TAB = 'Newsletter Campagnes';
 const CAMPAGNES_HEADERS = ['Sujet', 'Contenu', 'Statut', "Date d'envoi", 'Destinataires'];
 const CCOL = CAMPAGNES_HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
+
+const GALERIE_TAB = 'Galerie';
+const GALERIE_HEADERS = ['Titre', 'URL image', 'Ordre', 'Visible'];
+const GCOL = GALERIE_HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
 
 function getSheet_() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
@@ -135,6 +154,16 @@ function getCampagnesSheet_() {
   return sheet;
 }
 
+function getGalerieSheet_() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName(GALERIE_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(GALERIE_TAB);
+    sheet.appendRow(GALERIE_HEADERS);
+  }
+  return sheet;
+}
+
 function jsonOut_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
@@ -151,14 +180,32 @@ function doPost(e) {
     const data = JSON.parse(e.postData.contents);
     if (data.type === 'contact') return handleContact_(data);
     if (data.type === 'newsletter') return handleNewsletterSignup_(data);
+    if (data.type === 'checkAvailability') return handleCheckAvailability_(data);
     if (data.type === 'adminAuth') return handleAdminAuth_(data);
     if (data.type === 'adminList') return handleAdminList_(data);
     if (data.type === 'adminMarkPhotosReady') return handleAdminMarkPhotosReady_(data);
+    if (data.type === 'adminUpdateBookingStatus') return handleAdminUpdateBookingStatus_(data);
     if (data.type === 'adminSendNewsletter') return handleAdminSendNewsletter_(data);
+    if (data.type === 'adminAddGalleryImage') return handleAdminAddGalleryImage_(data);
+    if (data.type === 'adminDeleteGalleryImage') return handleAdminDeleteGalleryImage_(data);
     return handleBooking_(data);
   } catch (err) {
     return jsonOut_({ ok: false, error: 'server_error', message: String(err) });
   }
+}
+
+/** Indique si une date d'évènement est déjà prise par une réservation confirmée. */
+function handleCheckAvailability_(data) {
+  const date = String(data.date || '').trim();
+  if (!date) return jsonOut_({ ok: false, error: 'missing_field' });
+
+  const values = getSheet_().getDataRange().getValues();
+  const taken = values.slice(1).some(r => {
+    const raw = r[COL['Date évènement']];
+    const d = raw instanceof Date ? Utilities.formatDate(raw, Session.getScriptTimeZone(), 'yyyy-MM-dd') : String(raw);
+    return d === date && String(r[COL['Statut réservation']]).trim() === 'Confirmé';
+  });
+  return jsonOut_({ ok: true, date, taken });
 }
 
 /* ====== Administration (page admin.html du site) ====== */
@@ -190,12 +237,77 @@ function handleAdminList_(data) {
       email: r[COL['Email']],
       phone: r[COL['Téléphone']],
       statutPhotos: r[COL['Statut photos']] || 'En attente',
+      statutReservation: r[COL['Statut réservation']] || 'Nouvelle demande',
       driveFolderUrl: r[COL['Lien dossier Drive']],
     }))
     .reverse();
 
   const abonnesCount = Math.max(getAbonnesSheet_().getLastRow() - 1, 0);
-  return jsonOut_({ ok: true, bookings, abonnesCount });
+  return jsonOut_({ ok: true, bookings, abonnesCount, statutsReservation: STATUTS_RESERVATION });
+}
+
+/** Met à jour le statut de suivi (Nouvelle demande / Devis envoyé / Confirmé / Terminé) d'une réservation. */
+function handleAdminUpdateBookingStatus_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+  if (!STATUTS_RESERVATION.includes(data.statut)) return jsonOut_({ ok: false, error: 'invalid_status' });
+
+  const sheet = getSheet_();
+  const values = sheet.getDataRange().getValues();
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][COL['Référence']]).trim() === String(data.ref).trim()) {
+      sheet.getRange(i + 1, COL['Statut réservation'] + 1).setValue(data.statut);
+      return jsonOut_({ ok: true });
+    }
+  }
+  return jsonOut_({ ok: false, error: 'not_found' });
+}
+
+/** Extrait un ID de fichier Drive plausible depuis un lien de partage ou un ID brut collé par Yena. */
+function driveImageUrlFromInput_(input) {
+  const s = String(input || '').trim();
+  const match = s.match(/[-\w]{20,}/);
+  const id = match ? match[0] : s;
+  return `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
+}
+
+/** Ajoute une image à la galerie publique du site (photo dont Yena a les droits de diffusion, distincte des dossiers photos privés clients). */
+function handleAdminAddGalleryImage_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  const titre = String(data.titre || '').trim();
+  const lien = String(data.lien || '').trim();
+  if (!titre || !lien) return jsonOut_({ ok: false, error: 'missing_field' });
+
+  const sheet = getGalerieSheet_();
+  const ordre = sheet.getLastRow();
+  sheet.appendRow([titre, driveImageUrlFromInput_(lien), ordre, 'Oui']);
+  return jsonOut_({ ok: true });
+}
+
+function handleAdminDeleteGalleryImage_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  const rowIndex = Number(data.rowIndex);
+  const sheet = getGalerieSheet_();
+  if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) return jsonOut_({ ok: false, error: 'not_found' });
+  sheet.deleteRow(rowIndex);
+  return jsonOut_({ ok: true });
+}
+
+/** Liste publique des images de la galerie (pas d'authentification requise, contenu non sensible). */
+function handleGalleryPublic_() {
+  const values = getGalerieSheet_().getDataRange().getValues();
+  const images = values.slice(1)
+    .map((r, idx) => ({
+      rowIndex: idx + 2,
+      titre: r[GCOL['Titre']],
+      url: r[GCOL['URL image']],
+      ordre: Number(r[GCOL['Ordre']]) || 0,
+      visible: String(r[GCOL['Visible']]).trim().toLowerCase() !== 'non',
+    }))
+    .filter(img => img.visible && img.url)
+    .sort((a, b) => a.ordre - b.ordre);
+  return jsonOut_({ ok: true, images });
 }
 
 function formatDateForJson_(v) {
@@ -322,7 +434,7 @@ function handleBooking_(data) {
     data.ref, new Date(), data.service, data.eventDate, data.guests,
     data.location || '', data.budget || '', data.fullName, data.email, data.phone,
     data.message || '', 'En attente', clientFolder.getId(), driveFolderUrl,
-    calEvent.getId(), calendarEventUrl, '',
+    calEvent.getId(), calendarEventUrl, '', 'Nouvelle demande', '',
   ]);
 
   sendBookingEmails_(data, calendarEventUrl, driveFolderUrl);
@@ -374,6 +486,7 @@ function sendBookingEmails_(data, calendarEventUrl, driveFolderUrl) {
 function doGet(e) {
   try {
     if (e.parameter.action === 'unsubscribe') return handleUnsubscribe_(e);
+    if (e.parameter.action === 'gallery') return handleGalleryPublic_();
 
     const ref = (e.parameter.ref || '').trim();
     const email = (e.parameter.email || '').trim().toLowerCase();
@@ -392,6 +505,7 @@ function doGet(e) {
       service: row[COL['Prestation']],
       eventDate: row[COL['Date évènement']],
       fullName: row[COL['Nom']],
+      statutReservation: row[COL['Statut réservation']] || 'Nouvelle demande',
     };
 
     if (status === 'Prêt' && row[COL['Lien dossier Drive']]) {
@@ -447,6 +561,52 @@ function envoyerDemandesAvis() {
 
     GmailApp.sendEmail(email, "Votre avis compte pour nous — Yena Event", body, { name: 'Yena Event' });
     sheet.getRange(i + 1, COL['Avis demandé'] + 1).setValue('Oui');
+  }
+}
+
+/**
+ * Envoie un rappel aux clients dont l'évènement CONFIRMÉ a lieu dans
+ * `DELAI_RAPPEL_JOURS` jours ou moins (et qui n'en ont pas encore reçu un).
+ * Ne concerne que les réservations dont le "Statut réservation" est
+ * "Confirmé" — pas de rappel pour une simple demande jamais confirmée.
+ */
+function envoyerRappelsAvantEvenement() {
+  const sheet = getSheet_();
+  const values = sheet.getDataRange().getValues();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const rawDate = row[COL['Date évènement']];
+    const dejaEnvoye = row[COL['Rappel envoyé']];
+    const email = row[COL['Email']];
+    const statut = row[COL['Statut réservation']];
+    if (!rawDate || dejaEnvoye === 'Oui' || !email || statut !== 'Confirmé') continue;
+
+    const eventDate = rawDate instanceof Date ? rawDate : new Date(rawDate + 'T00:00:00');
+    eventDate.setHours(0, 0, 0, 0);
+    const joursRestants = Math.floor((eventDate - today) / 86400000);
+    if (joursRestants < 0 || joursRestants > DELAI_RAPPEL_JOURS) continue;
+
+    const fullName = row[COL['Nom']];
+    const service = row[COL['Prestation']];
+    const lieu = row[COL['Lieu']];
+    const dansCombien = joursRestants === 0 ? "aujourd'hui" : `dans ${joursRestants} jour${joursRestants > 1 ? 's' : ''}`;
+    const body = [
+      `Bonjour ${fullName},`,
+      '',
+      `Petit rappel : votre évènement (${service}) approche, c'est ${dansCombien} !`,
+      `Lieu : ${lieu || 'à confirmer avec notre équipe'}`,
+      '',
+      "Si vous avez la moindre question ou un dernier ajustement à faire, n'hésitez pas à nous contacter dès maintenant.",
+      '',
+      'Nous avons hâte d\'y être avec vous,',
+      'Yena Event',
+    ].join('\n');
+
+    GmailApp.sendEmail(email, 'Votre évènement approche — Yena Event', body, { name: 'Yena Event' });
+    sheet.getRange(i + 1, COL['Rappel envoyé'] + 1).setValue('Oui');
   }
 }
 
@@ -545,9 +705,10 @@ function envoyerNewsletter() {
   }
 }
 
-/** Regroupe les tâches quotidiennes automatiques (avis + newsletters en attente). */
+/** Regroupe les tâches quotidiennes automatiques (avis + rappels + newsletters en attente). */
 function tachesQuotidiennes() {
   envoyerDemandesAvis();
+  envoyerRappelsAvantEvenement();
   envoyerNewsletter();
 }
 
