@@ -53,6 +53,20 @@ let adminKey = null;
 let latestBookings = [];
 let statutsReservation = ['Nouvelle demande', 'Devis envoyé', 'Confirmé', 'Terminé'];
 
+/* ====== Onglets du tableau de bord ====== */
+const ADMIN_TABS = ['reservations', 'newsletter', 'galerie'];
+document.getElementById('adminTabBar').addEventListener('click', (e) => {
+  const btn = e.target.closest('.admin-tab-btn');
+  if (!btn) return;
+  const tab = btn.dataset.adminTab;
+  ADMIN_TABS.forEach(t => {
+    document.getElementById('adminPanel-' + t).hidden = t !== tab;
+    const b = document.querySelector(`.admin-tab-btn[data-admin-tab="${t}"]`);
+    b.classList.toggle('active', t === tab);
+    b.setAttribute('aria-selected', String(t === tab));
+  });
+});
+
 function showLogin_(message) {
   adminKey = null;
   try { localStorage.removeItem(ADMIN_KEY_STORAGE); } catch (err) { /* ignore */ }

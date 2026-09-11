@@ -58,7 +58,13 @@
       </div>
     </div>
 
-    <div class="admin-panel">
+    <nav class="admin-tab-bar" role="tablist" id="adminTabBar">
+      <button type="button" class="admin-tab-btn active" data-admin-tab="reservations" role="tab" aria-selected="true">Réservations</button>
+      <button type="button" class="admin-tab-btn" data-admin-tab="newsletter" role="tab" aria-selected="false">Newsletter</button>
+      <button type="button" class="admin-tab-btn" data-admin-tab="galerie" role="tab" aria-selected="false">Galerie</button>
+    </nav>
+
+    <div class="admin-panel" id="adminPanel-reservations">
       <div class="admin-panel-head">
         <h2>Réservations</h2>
         <div class="admin-panel-actions">
@@ -87,7 +93,7 @@
       </div>
     </div>
 
-    <div class="admin-panel">
+    <div class="admin-panel" id="adminPanel-newsletter" hidden>
       <div class="admin-panel-head">
         <h2>Newsletter</h2>
       </div>
@@ -107,7 +113,7 @@
       </form>
     </div>
 
-    <div class="admin-panel">
+    <div class="admin-panel" id="adminPanel-galerie" hidden>
       <div class="admin-panel-head">
         <h2>Galerie du site</h2>
       </div>

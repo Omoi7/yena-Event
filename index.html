@@ -22,32 +22,31 @@
     <a href="#accueil" class="logo">
       <img src="assets/logo-block.png" alt="Yena Event" class="logo-block-img" width="357" height="400">
     </a>
-    <nav class="main-nav" id="mainNav">
-      <a href="#accueil">Accueil</a>
-      <a href="#apropos">À propos</a>
-      <a href="#prestations">Prestations</a>
-      <a href="#process">Déroulement</a>
-      <a href="#catalogue">Catalogue</a>
-      <a href="#galerie">Galerie</a>
-      <a href="#avis">Avis</a>
-      <a href="#photos">Mes photos</a>
-      <a href="#faq">FAQ</a>
-      <a href="#contact">Contact</a>
-    </nav>
     <div class="header-actions">
       <a href="tel:+33600000000" class="header-phone">📞 +33 6 00 00 00 00</a>
       <a href="#reservation" class="btn btn-primary">Valider une prestation</a>
-      <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false">
-        <span></span><span></span><span></span>
-      </button>
     </div>
   </div>
 </header>
 
+<nav class="tab-bar" id="tabBar" role="tablist" aria-label="Sections du site">
+  <button type="button" class="tab-btn active" data-tab="accueil" role="tab" aria-selected="true">Accueil</button>
+  <button type="button" class="tab-btn" data-tab="apropos" role="tab" aria-selected="false">À propos</button>
+  <button type="button" class="tab-btn" data-tab="prestations" role="tab" aria-selected="false">Prestations</button>
+  <button type="button" class="tab-btn" data-tab="process" role="tab" aria-selected="false">Déroulement</button>
+  <button type="button" class="tab-btn" data-tab="catalogue" role="tab" aria-selected="false">Catalogue</button>
+  <button type="button" class="tab-btn" data-tab="galerie" role="tab" aria-selected="false">Galerie</button>
+  <button type="button" class="tab-btn" data-tab="avis" role="tab" aria-selected="false">Avis</button>
+  <button type="button" class="tab-btn" data-tab="reservation" role="tab" aria-selected="false">Réservation</button>
+  <button type="button" class="tab-btn" data-tab="photos" role="tab" aria-selected="false">Mes photos</button>
+  <button type="button" class="tab-btn" data-tab="faq" role="tab" aria-selected="false">FAQ</button>
+  <button type="button" class="tab-btn" data-tab="contact" role="tab" aria-selected="false">Contact</button>
+</nav>
+
 <main>
 
   <!-- HERO -->
-  <section id="accueil" class="hero">
+  <section id="accueil" class="hero tab-panel">
     <div class="hero-bg" aria-hidden="true"></div>
     <div class="container hero-inner">
       <p class="reveal eyebrow">Agence évènementielle — Mariages · Anniversaires · Séminaires · Galas</p>
@@ -68,7 +67,7 @@
   </section>
 
   <!-- APROPOS -->
-  <section id="apropos" class="section">
+  <section id="apropos" class="section tab-panel" hidden>
     <div class="container about-grid">
       <div class="about-visual reveal">
         <div class="about-frame">
@@ -96,7 +95,7 @@
   </section>
 
   <!-- PRESTATIONS -->
-  <section id="prestations" class="section section-alt">
+  <section id="prestations" class="section section-alt tab-panel" hidden>
     <div class="container">
       <div class="section-head reveal">
         <p class="eyebrow">Nos prestations</p>
@@ -110,7 +109,7 @@
   </section>
 
   <!-- PROCESS -->
-  <section id="process" class="section">
+  <section id="process" class="section tab-panel" hidden>
     <div class="container">
       <div class="section-head reveal">
         <p class="eyebrow">Comment ça marche</p>
@@ -148,7 +147,7 @@
     aux vraies prestations de Yena Event avant de considérer cette
     section comme définitive.
   -->
-  <section id="catalogue" class="section section-alt">
+  <section id="catalogue" class="section section-alt tab-panel" hidden>
     <div class="container">
       <div class="section-head reveal">
         <p class="eyebrow">Catalogue</p>
@@ -194,7 +193,7 @@
   </section>
 
   <!-- GALERIE -->
-  <section id="galerie" class="section">
+  <section id="galerie" class="section tab-panel" hidden>
     <div class="container">
       <div class="section-head reveal">
         <p class="eyebrow">Inspirations</p>
@@ -205,7 +204,7 @@
   </section>
 
   <!-- AVIS -->
-  <section id="avis" class="section">
+  <section id="avis" class="section tab-panel" hidden>
     <div class="container">
       <div class="section-head reveal">
         <p class="eyebrow">Témoignages</p>
@@ -219,7 +218,7 @@
   </section>
 
   <!-- RESERVATION -->
-  <section id="reservation" class="section section-dark">
+  <section id="reservation" class="section section-dark tab-panel" hidden>
     <div class="container">
       <div class="section-head reveal light">
         <p class="eyebrow">Réservation en ligne</p>
@@ -347,7 +346,7 @@
   </section>
 
   <!-- MES PHOTOS -->
-  <section id="photos" class="section section-alt">
+  <section id="photos" class="section section-alt tab-panel" hidden>
     <div class="container">
       <div class="section-head reveal">
         <p class="eyebrow">Après votre évènement</p>
@@ -372,7 +371,7 @@
   </section>
 
   <!-- FAQ -->
-  <section id="faq" class="section">
+  <section id="faq" class="section tab-panel" hidden>
     <div class="container faq-wrap">
       <div class="section-head reveal">
         <p class="eyebrow">Questions fréquentes</p>
@@ -383,7 +382,7 @@
   </section>
 
   <!-- CONTACT -->
-  <section id="contact" class="section section-alt">
+  <section id="contact" class="section section-alt tab-panel" hidden>
     <div class="container contact-grid">
       <div class="contact-info reveal">
         <p class="eyebrow">Contact</p>

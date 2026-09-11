@@ -18,10 +18,8 @@ function showToast(msg, duration = 3200) {
   showToast._t = setTimeout(() => toast.classList.remove('show'), duration);
 }
 
-/* ====== Header scroll + mobile nav ====== */
+/* ====== Header scroll ====== */
 const header = document.getElementById('siteHeader');
-const burger = document.getElementById('burger');
-const mainNav = document.getElementById('mainNav');
 
 const scrollProgress = document.getElementById('scrollProgress');
 window.addEventListener('scroll', () => {
@@ -31,18 +29,6 @@ window.addEventListener('scroll', () => {
   const pct = docHeight > 0 ? (window.scrollY / docHeight) * 100 : 0;
   scrollProgress.style.width = pct + '%';
 }, { passive: true });
-
-burger.addEventListener('click', () => {
-  const open = mainNav.classList.toggle('open');
-  burger.classList.toggle('open', open);
-  burger.setAttribute('aria-expanded', String(open));
-});
-
-mainNav.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
-  mainNav.classList.remove('open');
-  burger.classList.remove('open');
-  burger.setAttribute('aria-expanded', 'false');
-}));
 
 document.getElementById('backToTop').addEventListener('click', () => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -58,6 +44,55 @@ const revealObserver = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.15 });
 document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
+
+/* ====== Navigation par onglets (sections) ====== */
+const TAB_IDS = ['accueil', 'apropos', 'prestations', 'process', 'catalogue', 'galerie', 'avis', 'reservation', 'photos', 'faq', 'contact'];
+const tabBar = document.getElementById('tabBar');
+
+function activateTab_(id, opts = {}) {
+  if (!TAB_IDS.includes(id)) id = 'accueil';
+  TAB_IDS.forEach(tid => {
+    const section = document.getElementById(tid);
+    const isActive = tid === id;
+    if (section) section.hidden = !isActive;
+    const btn = tabBar.querySelector(`.tab-btn[data-tab="${tid}"]`);
+    if (btn) {
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-selected', String(isActive));
+    }
+  });
+  // Les éléments "reveal" de l'onglet qui vient d'apparaître sont affichés
+  // immédiatement (pas de fondu à l'apparition : ce n'est pas un défilement).
+  const activeSection = document.getElementById(id);
+  if (activeSection) activeSection.querySelectorAll('.reveal').forEach(el => el.classList.add('in-view'));
+
+  const activeBtn = tabBar.querySelector(`.tab-btn[data-tab="${id}"]`);
+  if (activeBtn) activeBtn.scrollIntoView({ block: 'nearest', inline: 'center', behavior: opts.instant ? 'auto' : 'smooth' });
+
+  if (!opts.skipScrollTop) window.scrollTo({ top: 0, behavior: opts.instant ? 'auto' : 'smooth' });
+  if (!opts.skipHistory) history.replaceState(null, '', '#' + id);
+}
+
+tabBar.addEventListener('click', (e) => {
+  const btn = e.target.closest('.tab-btn');
+  if (!btn) return;
+  activateTab_(btn.dataset.tab);
+});
+
+// Intercepte tout lien interne "#section" (nav, boutons d'appel à l'action,
+// liens du footer…) pour basculer d'onglet au lieu de défiler la page.
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a[href^="#"]');
+  if (!a) return;
+  const id = a.getAttribute('href').slice(1);
+  if (!TAB_IDS.includes(id)) return;
+  e.preventDefault();
+  activateTab_(id);
+});
+
+// Au chargement : respecte l'onglet indiqué dans l'URL (lien partagé), sinon Accueil.
+const initialTab = TAB_IDS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'accueil';
+activateTab_(initialTab, { instant: true, skipScrollTop: true, skipHistory: true });
 
 /* ====== Hero stat counters ====== */
 const statObserver = new IntersectionObserver((entries) => {
@@ -108,7 +143,7 @@ servicesGrid.addEventListener('click', (e) => {
   const btn = e.target.closest('.service-pick');
   if (!btn) return;
   selectService(btn.dataset.service);
-  document.getElementById('reservation').scrollIntoView({ behavior: 'smooth' });
+  activateTab_('reservation');
 });
 
 /* ====== Booking form: build option cards from SERVICES ====== */
