@@ -421,8 +421,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .whatsapp-float:hover{transform:scale(1.08); box-shadow:var(--shadow-lg);}
 @media(max-width:640px){.whatsapp-float{width:48px; height:48px; bottom:20px; left:20px;}}
 .toast{
-  position:fixed; top:20px; left:50%; transform:translate(-50%,-140%); z-index:2000;
+  position:fixed; top:20px; left:50%; transform:translate(-50%,-150%); z-index:2000;
   background:var(--brown-950); color:var(--cream); padding:14px 24px; border-radius:100px;
   font-size:.9rem; box-shadow:var(--shadow-md); transition:.35s ease;
+  opacity:0; visibility:hidden;
 }
-.toast.show{transform:translate(-50%,0);}
+.toast.show{transform:translate(-50%,0); opacity:1; visibility:visible;}
