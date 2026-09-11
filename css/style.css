@@ -77,7 +77,10 @@ em{font-style:italic; color:var(--gold);}
 .site-header.scrolled{box-shadow:var(--shadow-sm); background:rgba(251,247,239,.94);}
 .header-inner{display:flex; align-items:center; justify-content:space-between; gap:24px;}
 .logo{display:flex; align-items:center;}
-.logo-block-img{height:60px; width:auto; display:block; box-shadow:var(--shadow-sm); border-radius:14px;}
+.logo-block-img{
+  height:64px; width:auto; display:block; border-radius:14px;
+  border:2px solid var(--brown); box-shadow:var(--shadow-md);
+}
 .main-nav{display:flex; gap:28px;}
 .main-nav a{font-size:.92rem; font-weight:500; color:var(--text-soft); position:relative; padding:6px 0;}
 .main-nav a:hover{color:var(--brown);}
