@@ -16,7 +16,7 @@ Site vitrine interactif pour l'agence évènementielle Yena Event (mariages, ann
 - **Espace « Mes photos »** : chaque client retrouve le statut de son dossier et les photos de son évènement (référence + email) dans le dossier Google Drive dédié créé automatiquement
 - **Emails automatiques** : confirmation au client et notification à Yena à chaque réservation, message de contact envoyé directement par email, **rappel au client 7 jours avant son évènement confirmé**, et **demande d'avis Google automatique** 2 jours après
 - **Newsletter** : Yena écrit son texte (depuis le Sheet ou la page admin), elle part automatiquement à tous les anciens clients et aux inscrits du site (lien de désinscription inclus)
-- **Section Tarifs** avec forfaits indicatifs (contenu exemple à personnaliser)
+- **Catalogue de formules** (sans prix affichés, devis personnalisé systématique — contenu exemple à personnaliser)
 - **Galerie publique gérable depuis l'admin**, distincte des dossiers photos privés des clients
 - **Page d'administration** (`admin.html`, protégée par mot de passe) : réservations avec suivi de statut, activation de l'accès aux photos, gestion de la galerie, envoi de newsletter, export CSV — sans jamais ouvrir le Google Sheet
 - Bouton WhatsApp flottant, formulaire de contact (envoyé par email à Yena) et inscription newsletter
@@ -191,14 +191,15 @@ automatiques, contact form silencieux côté Yena).
 
 ## Contenus à personnaliser avant mise en ligne définitive
 
-- **Section Tarifs** (`index.html`, section `#tarifs`) : les 3 forfaits et
-  montants sont des exemples, à remplacer par les vrais tarifs.
+- **Catalogue** (`index.html`, section `#catalogue`) : les 3 formules et
+  leurs inclusions sont des exemples, à adapter aux vraies prestations.
 - **Bouton WhatsApp** (`index.html`, tout en bas) : numéro placeholder
   `+33 6 00 00 00 00`, à remplacer par le vrai numéro WhatsApp.
-- Plus généralement, le téléphone, l'adresse et l'email affichés en plusieurs
-  endroits du site (`+33 6 00 00 00 00`, `12 rue des Fêtes`,
-  `contact@yena-event.fr`) sont encore des exemples d'origine — seule
-  l'adresse `yena.event7@gmail.com` utilisée par le backend est réelle.
+- Plus généralement, le téléphone et l'email affichés en plusieurs
+  endroits du site (`+33 6 00 00 00 00`, `contact@yena-event.fr`) sont
+  encore des exemples d'origine — seule l'adresse `yena.event7@gmail.com`
+  utilisée par le backend est réelle. La zone géographique affichée en
+  contact (« Île-de-France ») est en revanche réelle.
 
 ## Pistes envisagées mais non implémentées
 
