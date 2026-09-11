@@ -354,6 +354,9 @@ em{font-style:italic; color:var(--gold);}
 .site-footer{background:var(--brown-950); color:rgba(251,247,239,.75); padding:72px 0 0;}
 .footer-grid{display:grid; grid-template-columns:1.4fr 1fr 1fr 1.2fr; gap:40px; padding-bottom:48px; border-bottom:1px solid rgba(251,247,239,.1);}
 .footer-logo{margin-bottom:14px;}
+.footer-logo .logo-block-img{
+  background:var(--beige); padding:10px 14px; border-radius:14px;
+}
 .site-footer h4{color:var(--cream); font-family:var(--font-body); font-size:.9rem; text-transform:uppercase; letter-spacing:1px; margin-bottom:16px;}
 .site-footer a{display:block; padding:5px 0; font-size:.9rem;}
 .site-footer a:hover{color:var(--gold);}
