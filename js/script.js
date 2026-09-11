@@ -834,16 +834,19 @@ depositForm.addEventListener('submit', (e) => {
   checkDepositStatus_(ref, email);
 });
 
-// Retour depuis Stripe Checkout (succès ou annulation), via ?ref=...&session_id=...
-(function handleStripeReturn_() {
+// Retour depuis Stripe Checkout (?ref=...&session_id=...), ou lien direct
+// envoyé par email dès qu'un devis est prêt (?ref=...&email=...#acompte).
+(function handleDepositLinkReturn_() {
   const params = new URLSearchParams(location.search);
   const ref = params.get('ref');
+  const email = params.get('email');
   const sessionId = params.get('session_id');
   if (!ref) return;
 
   document.getElementById('depositRef').value = ref;
-  // Nettoie l'URL (les paramètres de retour Stripe n'ont plus lieu d'être
-  // une fois lus) sans recharger la page ni perdre l'onglet actif.
+  if (email) document.getElementById('depositEmail').value = email;
+  // Nettoie l'URL (ces paramètres n'ont plus lieu d'être une fois lus) sans
+  // recharger la page ni perdre l'onglet actif.
   history.replaceState(null, '', location.pathname + location.hash);
 
   if (sessionId) {
@@ -852,5 +855,7 @@ depositForm.addEventListener('submit', (e) => {
         ? 'Paiement confirmé, merci !'
         : "Paiement reçu par Stripe, confirmation en cours — vérifiez dans quelques instants ou contactez-nous.");
     });
+  } else if (email) {
+    checkDepositStatus_(ref, email);
   }
 })();

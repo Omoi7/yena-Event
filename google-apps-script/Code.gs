@@ -21,6 +21,11 @@
  *    en indiquant leur référence de réservation + leur email.
  *  - Rappel automatique 7 jours avant un évènement CONFIRMÉ (colonne
  *    "Statut réservation" = "Confirmé"), pour le client.
+ *  - Emails automatiques supplémentaires côté client : dès que Yena confirme
+ *    la réservation, dès qu'elle saisit le montant du devis (avec le montant
+ *    de l'acompte et le lien direct pour le régler en ligne), puis une
+ *    relance automatique si l'acompte reste impayé au bout de
+ *    `DELAI_RELANCE_ACOMPTE_JOURS` jours.
  *  - Vérification de disponibilité en direct sur le formulaire du site : une
  *    date déjà occupée par une réservation confirmée est signalée au client.
  *  - Galerie publique du site alimentée depuis l'onglet "Galerie" du Sheet
@@ -147,6 +152,9 @@ const DELAI_AVIS_JOURS = 2;
 // Nombre de jours avant la date de l'évènement pour l'envoi du rappel.
 const DELAI_RAPPEL_JOURS = 7;
 
+// Nombre de jours après l'envoi d'un devis (sans acompte réglé) avant la relance automatique.
+const DELAI_RELANCE_ACOMPTE_JOURS = 5;
+
 // Statuts possibles pour le suivi d'une réservation (colonne "Statut réservation").
 const STATUTS_RESERVATION = ['Nouvelle demande', 'Devis envoyé', 'Confirmé', 'Terminé'];
 
@@ -164,6 +172,7 @@ const HEADERS = [
   'ID dossier Drive', 'Lien dossier Drive', 'ID évènement Calendar', 'Lien évènement Calendar',
   'Avis demandé', 'Statut réservation', 'Rappel envoyé',
   'Montant devis (€)', 'Acompte payé', 'Stripe Session ID',
+  'Devis envoyé le', 'Relance acompte envoyée',
 ];
 
 const COL = HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
@@ -411,7 +420,11 @@ function handleAdminUpdateBookingStatus_(data) {
     const values = sheet.getDataRange().getValues();
     for (let i = 1; i < values.length; i++) {
       if (String(values[i][COL['Référence']]).trim() === String(data.ref).trim()) {
+        const ancienStatut = values[i][COL['Statut réservation']];
         sheet.getRange(i + 1, COL['Statut réservation'] + 1).setValue(data.statut);
+        if (data.statut === 'Confirmé' && ancienStatut !== 'Confirmé') {
+          sendBookingConfirmedEmail_(values[i]);
+        }
         return jsonOut_({ ok: true });
       }
     }
@@ -419,7 +432,7 @@ function handleAdminUpdateBookingStatus_(data) {
   });
 }
 
-/** Renseigne le montant total du devis d'une réservation (base de calcul de l'acompte). */
+/** Renseigne le montant total du devis d'une réservation (base de calcul de l'acompte) et prévient le client par email. */
 function handleAdminSetQuoteAmount_(data) {
   if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
   const montant = Number(data.montant);
@@ -431,11 +444,58 @@ function handleAdminSetQuoteAmount_(data) {
     for (let i = 1; i < values.length; i++) {
       if (String(values[i][COL['Référence']]).trim() === String(data.ref).trim()) {
         sheet.getRange(i + 1, COL['Montant devis (€)'] + 1).setValue(montant);
+        sheet.getRange(i + 1, COL['Devis envoyé le'] + 1).setValue(new Date());
+        sheet.getRange(i + 1, COL['Relance acompte envoyée'] + 1).setValue('');
+        if (montant > 0) {
+          sendQuoteEmail_(values[i], montant);
+        }
         return jsonOut_({ ok: true });
       }
     }
     return jsonOut_({ ok: false, error: 'not_found' });
   });
+}
+
+/** Construit le lien direct vers l'onglet "Acompte" du site, référence et email de la réservation pré-remplis. */
+function depositLink_(ref, email) {
+  return `${SITE_URL}?ref=${encodeURIComponent(ref)}&email=${encodeURIComponent(email)}#acompte`;
+}
+
+/** Email envoyé au client dès que Yena confirme sa réservation depuis l'admin. */
+function sendBookingConfirmedEmail_(row) {
+  const email = row[COL['Email']];
+  if (!email) return;
+  const body = [
+    `Bonjour ${row[COL['Nom']]},`,
+    '',
+    `Bonne nouvelle : votre réservation (${row[COL['Prestation']]}, référence ${row[COL['Référence']]}) est confirmée !`,
+    '',
+    "Nous revenons vers vous prochainement avec le montant définitif du devis et les modalités de l'acompte.",
+    '',
+    'À très bientôt,',
+    'Yena Event',
+  ].join('\n');
+  GmailApp.sendEmail(email, `Réservation confirmée — ${row[COL['Référence']]}`, body, { name: 'Yena Event' });
+}
+
+/** Email envoyé au client quand Yena renseigne le montant du devis, avec le montant de l'acompte et le lien direct pour le régler. */
+function sendQuoteEmail_(row, montant) {
+  const email = row[COL['Email']];
+  if (!email) return;
+  const acompte = Math.round(montant * DEPOSIT_PERCENT * 100) / 100;
+  const percent = Math.round(DEPOSIT_PERCENT * 100);
+  const body = [
+    `Bonjour ${row[COL['Nom']]},`,
+    '',
+    `Votre devis pour "${row[COL['Prestation']]}" (référence ${row[COL['Référence']]}) est prêt : ${montant} €.`,
+    `Un acompte de ${percent}% (${acompte} €) est à régler pour valider définitivement votre réservation.`,
+    '',
+    `Réglez votre acompte en ligne en quelques clics : ${depositLink_(row[COL['Référence']], email)}`,
+    '',
+    'Merci de votre confiance,',
+    'Yena Event',
+  ].join('\n');
+  GmailApp.sendEmail(email, `Votre devis est prêt — ${row[COL['Référence']]}`, body, { name: 'Yena Event' });
 }
 
 /**
@@ -1133,6 +1193,52 @@ function envoyerRappelsAvantEvenement() {
   }
 }
 
+/**
+ * Relance les clients dont le devis a été envoyé depuis au moins
+ * `DELAI_RELANCE_ACOMPTE_JOURS` jours sans que l'acompte n'ait été réglé
+ * (et qui n'ont pas déjà reçu de relance pour ce devis — le compteur est
+ * remis à zéro à chaque nouveau devis saisi par Yena, voir
+ * `handleAdminSetQuoteAmount_`).
+ */
+function envoyerRelancesAcompte_() {
+  const sheet = getSheet_();
+  const values = sheet.getDataRange().getValues();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const montant = Number(row[COL['Montant devis (€)']]) || 0;
+    const devisEnvoyeLe = row[COL['Devis envoyé le']];
+    const acomptePaye = String(row[COL['Acompte payé']]).trim().toLowerCase() === 'oui';
+    const relanceDejaEnvoyee = row[COL['Relance acompte envoyée']];
+    const email = row[COL['Email']];
+    if (!montant || !devisEnvoyeLe || acomptePaye || relanceDejaEnvoyee === 'Oui' || !email) continue;
+
+    const dateDevis = devisEnvoyeLe instanceof Date ? devisEnvoyeLe : new Date(devisEnvoyeLe);
+    dateDevis.setHours(0, 0, 0, 0);
+    const joursEcoules = Math.floor((today - dateDevis) / 86400000);
+    if (joursEcoules < DELAI_RELANCE_ACOMPTE_JOURS) continue;
+
+    const acompte = Math.round(montant * DEPOSIT_PERCENT * 100) / 100;
+    const body = [
+      `Bonjour ${row[COL['Nom']]},`,
+      '',
+      `Petit rappel : l'acompte de ${acompte} € pour votre réservation "${row[COL['Prestation']]}" (référence ${row[COL['Référence']]}) est toujours en attente de règlement.`,
+      '',
+      `Réglez-le en ligne en quelques clics : ${depositLink_(row[COL['Référence']], email)}`,
+      '',
+      "Si vous avez déjà réglé ou avez la moindre question, n'hésitez pas à nous contacter directement.",
+      '',
+      'Merci,',
+      'Yena Event',
+    ].join('\n');
+
+    GmailApp.sendEmail(email, `Rappel — acompte en attente (${row[COL['Référence']]})`, body, { name: 'Yena Event' });
+    sheet.getRange(i + 1, COL['Relance acompte envoyée'] + 1).setValue('Oui');
+  }
+}
+
 function handleUnsubscribe_(e) {
   const email = String(e.parameter.email || '').trim().toLowerCase();
   if (email) {
@@ -1232,6 +1338,7 @@ function envoyerNewsletter() {
 function tachesQuotidiennes() {
   envoyerDemandesAvis();
   envoyerRappelsAvantEvenement();
+  envoyerRelancesAcompte_();
   envoyerNewsletter();
 }
 

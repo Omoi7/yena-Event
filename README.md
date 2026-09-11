@@ -14,7 +14,7 @@ Site vitrine interactif pour l'agence évènementielle Yena Event (mariages, ann
 - **Ajout au calendrier en un clic** (Google Calendar + fichier .ics) dès la validation de la demande
 - **Paiement de l'acompte en ligne** (Stripe Checkout) une fois la réservation confirmée et le devis chiffré par Yena
 - **Espace « Mes photos »** : chaque client retrouve le statut de son dossier et les photos de son évènement (référence + email) dans le dossier Google Drive dédié créé automatiquement
-- **Emails automatiques** : confirmation au client et notification à Yena à chaque réservation, message de contact envoyé directement par email, **rappel au client 7 jours avant son évènement confirmé**, et **demande d'avis Google automatique** 2 jours après
+- **Emails automatiques** : confirmation au client et notification à Yena à chaque réservation, message de contact envoyé directement par email, **email dès la confirmation de la réservation**, **email avec le montant de l'acompte et le lien de paiement dès que le devis est saisi** (+ **relance automatique** si l'acompte reste impayé après 5 jours), **rappel au client 7 jours avant son évènement confirmé**, et **demande d'avis Google automatique** 2 jours après
 - **Newsletter** : Yena écrit son texte (depuis le Sheet ou la page admin), elle part automatiquement à tous les anciens clients et aux inscrits du site (lien de désinscription inclus)
 - **Catalogue de formules** (sans prix affichés, devis personnalisé systématique — contenu exemple à personnaliser)
 - **Galerie publique gérable depuis l'admin**, distincte des dossiers photos privés des clients
@@ -65,6 +65,9 @@ action manuelle** :
 | 2 jours après la date d'un évènement | **Email automatique envoyé au client** pour lui demander de laisser un avis Google (lien vers [la fiche Yena Event](https://maps.app.goo.gl/5UB9AKGLjTxDrgbWA)) — envoyé une seule fois par réservation |
 | Yena écrit une newsletter et passe son Statut à `Envoyer maintenant` | **Envoyée automatiquement** à tous les anciens clients et abonnés du site, le lendemain matin au plus tard |
 | 7 jours avant un évènement dont le « Statut réservation » est `Confirmé` | **Email de rappel automatique envoyé au client**, une seule fois |
+| Yena passe le « Statut réservation » d'une réservation à `Confirmé` | **Email de confirmation envoyé au client** |
+| Yena renseigne le montant du devis (« Montant devis (€) ») dans l'admin | **Email envoyé au client** avec le montant de l'acompte et un lien direct vers l'onglet « Acompte » du site, référence et email déjà pré-remplis |
+| 5 jours après l'envoi du devis, si l'acompte n'a toujours pas été réglé | **Email de relance automatique envoyé au client**, une seule fois par devis (le compteur repart à zéro si Yena change le montant du devis) |
 | Un visiteur choisit une date sur le formulaire | Le site interroge le Sheet en direct et signale si la date est déjà prise par une réservation `Confirmé` |
 | Yena dépose les photos et passe une ligne à `Prêt` (colonne « Statut photos » du Sheet) | Le client peut voir/ouvrir son dossier photo depuis l'espace « Mes photos » du site |
 
