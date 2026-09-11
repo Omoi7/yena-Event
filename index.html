@@ -271,6 +271,12 @@
                 <input type="text" id="location" name="location" placeholder="Ville, salle, ou à définir">
               </div>
               <div class="field">
+                <label for="typePrestation">Type de prestation</label>
+                <select id="typePrestation" name="typePrestation">
+                  <option value="Photobooth" selected>Photobooth</option>
+                </select>
+              </div>
+              <div class="field">
                 <label for="budget">Budget estimé</label>
                 <select id="budget" name="budget">
                   <option value="">Sélectionner…</option>
@@ -382,6 +388,23 @@
           <button type="submit" class="btn btn-primary" id="suiviSubmitBtn">Voir mon suivi</button>
         </form>
         <div class="photos-result" id="suiviResult" hidden></div>
+
+        <div class="contour-block" id="contourBlock" hidden>
+          <h4>🖼️ Exemple de contour souhaité</h4>
+          <p class="section-sub">Pour votre photobooth, décrivez et/ou montrez-nous le style de contour (cadre autour de vos photos) que vous imaginez pour vos tirages.</p>
+          <form id="contourForm" novalidate>
+            <div class="field">
+              <label for="contourDescription">Description (facultatif si vous ajoutez une image)</label>
+              <textarea id="contourDescription" rows="3" placeholder="Ex : cadre doré avec nos prénoms et la date en bas…"></textarea>
+            </div>
+            <div class="field">
+              <label for="contourImages">Images d'exemple (facultatif, 3 maximum, 5 Mo max chacune)</label>
+              <input type="file" id="contourImages" accept="image/*" multiple>
+            </div>
+            <p class="field-error" id="err-contour"></p>
+            <button type="submit" class="btn btn-outline" id="contourSubmitBtn">Envoyer à Yena Event</button>
+          </form>
+        </div>
       </div>
     </div>
   </section>

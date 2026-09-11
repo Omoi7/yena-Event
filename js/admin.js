@@ -163,11 +163,15 @@ function renderBookings_() {
     if (b.nbReservations > 1) badges.push(`<span class="status-pill ready" title="Réservations passées avec cet email">🔁 ${b.nbReservations}ᵉ réservation</span>`);
     const clientBadges = badges.length ? `<br>${badges.join(' ')}` : '';
 
+    const contourNote = b.typePrestation === 'Photobooth' && b.contourDescription
+      ? `<br><span class="status-pill pending" title="${escapeHtml_(b.contourDescription)}">🖼️ Contour souhaité</span>`
+      : '';
+
     return `
       <tr>
         <td>${ref}</td>
         <td>${escapeHtml_(b.fullName) || '—'}${clientBadges}</td>
-        <td>${escapeHtml_(b.service) || '—'}</td>
+        <td>${escapeHtml_(b.service) || '—'}${b.typePrestation ? `<br><span style="color:var(--text-soft)">${escapeHtml_(b.typePrestation)}</span>` : ''}${contourNote}</td>
         <td>${formatDateFr_(b.eventDate)}</td>
         <td>${escapeHtml_(b.email)}<br><span style="color:var(--text-soft)">${escapeHtml_(b.phone)}</span></td>
         <td><select class="status-select" data-ref="${ref}">${options}</select></td>

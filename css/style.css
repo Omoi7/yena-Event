@@ -410,6 +410,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .suivi-history-title{margin:18px 0 6px; font-weight:600; color:var(--brown); font-size:.85rem;}
 .suivi-history-list{margin:0; padding-left:20px; font-size:.85rem; color:var(--text-soft);}
 .suivi-history-list li{margin-bottom:4px;}
+.contour-block{margin-top:28px; padding-top:24px; border-top:1px solid rgba(82,49,27,.12);}
+.contour-block h4{margin:0 0 6px; font-family:var(--font-display); font-size:1.1rem;}
+.contour-block textarea{width:100%; padding:12px 14px; border-radius:var(--radius-sm); border:1px solid rgba(82,49,27,.2); font-family:var(--font-body); font-size:.92rem; resize:vertical;}
+.contour-block input[type="file"]{width:100%; font-size:.85rem;}
 .spinner{
   display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,.4);
   border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; margin-right:8px; vertical-align:-3px;

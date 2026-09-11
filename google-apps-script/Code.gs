@@ -172,6 +172,20 @@ const LOYALTY_DISCOUNT_PERCENT = 10;
 // Statuts possibles pour le suivi d'une réservation (colonne "Statut réservation").
 const STATUTS_RESERVATION = ['Nouvelle demande', 'Devis envoyé', 'Confirmé', 'Terminé'];
 
+// Types de prestation proposés au client sur le formulaire de réservation.
+// Aujourd'hui, Yena Event ne fait que de la location de photobooth — cette
+// liste est volontairement une constante simple à étendre le jour où
+// d'autres types de prestations sont proposés (ajouter une valeur ici suffit,
+// le formulaire et l'admin s'adaptent automatiquement).
+const TYPES_PRESTATION = ['Photobooth'];
+
+// Dépôt d'exemples de contour (cadre/habillage des tirages photobooth) :
+// nombre d'images maximum par envoi, et poids maximum par image (en octets),
+// pour rester largement sous les quotas Drive/Apps Script.
+const CONTOUR_MAX_IMAGES = 3;
+const CONTOUR_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const CONTOUR_FOLDER_NAME = 'Contours souhaités (client)';
+
 // ID du dossier Drive "Événements" où sont déjà rangés tous les dossiers clients.
 const EVENTS_FOLDER_ID = '1TE3TYCJag1w4jG2-uyGnAdXBEhA3fAOd';
 
@@ -189,6 +203,7 @@ const HEADERS = [
   'Devis envoyé le', 'Relance acompte envoyée',
   'Type client', 'Parrainé par (référence)', 'Parrainage traité',
   'Réduction spéciale à appliquer (%)', 'Enquête envoyée',
+  'Type de prestation', 'Contour souhaité (description)',
 ];
 
 const COL = HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
@@ -359,6 +374,7 @@ function doPost(e) {
     if (data.type === 'adminMarkDepositPaid') return handleAdminMarkDepositPaid_(data);
     if (data.type === 'depositStatus') return handleDepositStatus_(data);
     if (data.type === 'getBookingStatus') return handleBookingStatus_(data);
+    if (data.type === 'submitContourPreferences') return handleSubmitContourPreferences_(data);
     if (data.type === 'createDepositCheckout') return handleCreateDepositCheckout_(data);
     if (data.type === 'confirmDepositPayment') return handleConfirmDepositPayment_(data);
     return handleBooking_(data);
@@ -432,6 +448,8 @@ function handleAdminList_(data) {
       typeClient: r[COL['Type client']] || '',
       nbReservations: countByEmail[String(r[COL['Email']] || '').trim().toLowerCase()] || 1,
       reductionSpeciale: Number(r[COL['Réduction spéciale à appliquer (%)']]) || 0,
+      typePrestation: r[COL['Type de prestation']] || '',
+      contourDescription: r[COL['Contour souhaité (description)']] || '',
     }))
     .reverse();
 
@@ -905,6 +923,7 @@ function handleBooking_(data) {
     phone: clampStr_(data.phone, 40),
     typeClient: ['Particulier', 'Entreprise'].includes(data.typeClient) ? data.typeClient : '',
     referralRef: clampStr_(data.referralRef, 60),
+    typePrestation: TYPES_PRESTATION.includes(data.typePrestation) ? data.typePrestation : TYPES_PRESTATION[0],
   });
 
   return withLock_(() => {
@@ -969,6 +988,7 @@ function handleBooking_(data) {
     if (data.typeClient) sheet.getRange(rowIndex, COL['Type client'] + 1).setValue(data.typeClient);
     if (data.referralRef) sheet.getRange(rowIndex, COL['Parrainé par (référence)'] + 1).setValue(data.referralRef);
     if (dejaClient) sheet.getRange(rowIndex, COL['Réduction spéciale à appliquer (%)'] + 1).setValue(LOYALTY_DISCOUNT_PERCENT);
+    sheet.getRange(rowIndex, COL['Type de prestation'] + 1).setValue(data.typePrestation);
 
     sendBookingEmails_(data, calendarEventUrl, driveFolderUrl);
     if (dejaClient) sendLoyaltyEmail_(data);
@@ -1089,7 +1109,77 @@ function handleBookingStatus_(data) {
     acomptePaye: String(row[COL['Acompte payé']]).trim().toLowerCase() === 'oui',
     depositPercent: DEPOSIT_PERCENT,
     calendarAddUrl: googleCalendarAddUrl_(row),
+    typePrestation: row[COL['Type de prestation']] || '',
+    contourDescription: row[COL['Contour souhaité (description)']] || '',
     history,
+  });
+}
+
+/**
+ * Dépôt par le client d'exemples de contour/cadre souhaité pour ses tirages
+ * photobooth (description écrite et/ou images), une fois sa réservation
+ * faite. Les images sont rangées dans le dossier Drive déjà créé pour cette
+ * réservation (sous-dossier dédié) ; la description est stockée dans le
+ * Sheet. Yena est prévenue par email à chaque dépôt.
+ */
+function handleSubmitContourPreferences_(data) {
+  const ref = String(data.ref || '').trim();
+  const email = String(data.email || '').trim();
+  if (!ref || !email) return jsonOut_({ ok: false, error: 'missing_field' });
+  if (!rateLimitOk_('submitContour', 10, 300)) return jsonOut_({ ok: false, error: 'rate_limited' });
+
+  const description = clampStr_(data.description, 2000);
+  const images = Array.isArray(data.images) ? data.images.slice(0, CONTOUR_MAX_IMAGES) : [];
+  if (!description && !images.length) return jsonOut_({ ok: false, error: 'missing_field' });
+
+  return withLock_(() => {
+    const sheet = getSheet_();
+    const values = sheet.getDataRange().getValues();
+    const rowIndex = values.findIndex((r, idx) => idx > 0 && String(r[COL['Référence']]).trim() === ref);
+    if (rowIndex === -1 || String(values[rowIndex][COL['Email']]).trim().toLowerCase() !== email.toLowerCase()) {
+      return jsonOut_({ ok: false, error: 'not_found' });
+    }
+    const row = values[rowIndex];
+
+    if (description) {
+      sheet.getRange(rowIndex + 1, COL['Contour souhaité (description)'] + 1).setValue(description);
+    }
+
+    let uploadedCount = 0;
+    if (images.length && row[COL['ID dossier Drive']]) {
+      const clientFolder = DriveApp.getFolderById(row[COL['ID dossier Drive']]);
+      const existingSub = clientFolder.getFoldersByName(CONTOUR_FOLDER_NAME);
+      const contourFolder = existingSub.hasNext() ? existingSub.next() : clientFolder.createFolder(CONTOUR_FOLDER_NAME);
+      images.forEach(img => {
+        if (!img || !img.data || !img.mimeType) return;
+        // Une chaîne base64 fait environ 4/3 de la taille des octets décodés :
+        // on borne sa longueur plutôt que de décoder puis rejeter, pour éviter
+        // de gaspiller du temps d'exécution sur un fichier trop lourd.
+        if (img.data.length > CONTOUR_MAX_IMAGE_BYTES * 4 / 3) return;
+        try {
+          const blob = Utilities.newBlob(Utilities.base64Decode(img.data), img.mimeType, clampStr_(img.name, 100) || 'contour.jpg');
+          contourFolder.createFile(blob);
+          uploadedCount++;
+        } catch (err) { /* fichier invalide/corrompu : on ignore sans bloquer les autres */ }
+      });
+    }
+
+    if (row[COL['Email']]) {
+      GmailApp.sendEmail(
+        OWNER_EMAIL,
+        `Exemple de contour reçu — ${ref}`,
+        [
+          `${row[COL['Nom']]} (${ref}) a déposé des préférences de contour pour son photobooth :`,
+          '',
+          description ? `Description : ${description}` : '(pas de description écrite)',
+          uploadedCount ? `${uploadedCount} image(s) déposée(s) dans le dossier Drive de la réservation.` : '',
+          `Dossier : ${row[COL['Lien dossier Drive']]}`,
+        ].filter(Boolean).join('\n'),
+        { name: 'Site Yena Event' }
+      );
+    }
+
+    return jsonOut_({ ok: true, uploadedCount });
   });
 }
 

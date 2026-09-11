@@ -19,6 +19,7 @@ Site vitrine interactif pour l'agence évènementielle Yena Event (mariages, ann
 - **Programme de parrainage** : un client indique la référence de la personne qui l'a recommandé, les deux reçoivent 10% de réduction sur leur prochain devis dès la réservation confirmée
 - **Fidélité automatique** : 10% de réduction créditée dès qu'un email déjà utilisé sur une réservation précédente refait une demande
 - **Profil client** (Particulier / Entreprise) optionnel sur le formulaire, visible dans l'admin
+- **Type de prestation** sur le formulaire (aujourd'hui uniquement « Photobooth », liste extensible dans `Code.gs` le jour où Yena propose d'autres prestations). Pour une prestation Photobooth, le client peut ensuite déposer depuis l'onglet « Mon suivi » une **description écrite et/ou des images d'exemple du contour souhaité** pour ses tirages — rangées automatiquement dans le dossier Drive de sa réservation, avec notification par email à Yena
 - **Newsletter** : Yena écrit son texte (depuis le Sheet ou la page admin), elle part automatiquement à tous les anciens clients et aux inscrits du site (lien de désinscription inclus)
 - **Catalogue de formules** (sans prix affichés, devis personnalisé systématique — contenu exemple à personnaliser)
 - **Galerie publique gérable depuis l'admin**, distincte des dossiers photos privés des clients

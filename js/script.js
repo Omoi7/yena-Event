@@ -533,6 +533,7 @@ bookingForm.addEventListener('submit', async (e) => {
     message: document.getElementById('message').value,
     typeClient: document.getElementById('typeClient').value,
     referralRef: document.getElementById('referralRef').value.trim(),
+    typePrestation: document.getElementById('typePrestation').value,
     createdAt: new Date().toISOString(),
     hp: document.getElementById('hpBooking').value,
   };
@@ -836,6 +837,16 @@ async function checkBookingStatus_(ref, email) {
       }
     });
   });
+
+  if (data.typePrestation === 'Photobooth') {
+    currentSuiviRef_ = ref;
+    currentSuiviEmail_ = email;
+    document.getElementById('contourDescription').value = data.contourDescription || '';
+    document.getElementById('err-contour').textContent = '';
+    contourBlock.hidden = false;
+  } else {
+    contourBlock.hidden = true;
+  }
 }
 
 suiviForm.addEventListener('submit', (e) => {
@@ -844,6 +855,80 @@ suiviForm.addEventListener('submit', (e) => {
   const email = document.getElementById('suiviEmail').value.trim();
   if (!ref || !email) return;
   checkBookingStatus_(ref, email);
+});
+
+/* ====== Exemples de contour (photobooth) ====== */
+const contourBlock = document.getElementById('contourBlock');
+const contourForm = document.getElementById('contourForm');
+const contourSubmitBtn = document.getElementById('contourSubmitBtn');
+const CONTOUR_MAX_IMAGES = 3;
+const CONTOUR_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+let currentSuiviRef_ = null;
+let currentSuiviEmail_ = null;
+
+function fileToBase64_(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+contourForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errEl = document.getElementById('err-contour');
+  errEl.textContent = '';
+  if (!currentSuiviRef_ || !currentSuiviEmail_) return;
+
+  const description = document.getElementById('contourDescription').value.trim();
+  const files = Array.from(document.getElementById('contourImages').files || []);
+
+  if (!description && !files.length) {
+    errEl.textContent = 'Ajoutez une description ou au moins une image.';
+    return;
+  }
+  if (files.length > CONTOUR_MAX_IMAGES) {
+    errEl.textContent = `${CONTOUR_MAX_IMAGES} images maximum.`;
+    return;
+  }
+  const tooLarge = files.find(f => f.size > CONTOUR_MAX_IMAGE_BYTES);
+  if (tooLarge) {
+    errEl.textContent = `"${tooLarge.name}" dépasse 5 Mo, choisissez une image plus légère.`;
+    return;
+  }
+
+  const originalLabel = contourSubmitBtn.textContent;
+  contourSubmitBtn.disabled = true;
+  contourSubmitBtn.innerHTML = '<span class="spinner"></span>Envoi en cours…';
+
+  try {
+    const images = await Promise.all(files.map(async f => ({
+      name: f.name,
+      mimeType: f.type || 'image/jpeg',
+      data: await fileToBase64_(f),
+    })));
+
+    const result = await sendToBackend_({
+      type: 'submitContourPreferences',
+      ref: currentSuiviRef_,
+      email: currentSuiviEmail_,
+      description,
+      images,
+    });
+
+    if (result.ok) {
+      showToast('Merci, vos préférences de contour ont bien été envoyées à Yena Event !');
+      document.getElementById('contourImages').value = '';
+    } else {
+      errEl.textContent = "Impossible d'envoyer votre demande, réessayez ou contactez-nous.";
+    }
+  } catch (err) {
+    errEl.textContent = 'Erreur lors de la lecture des images, réessayez.';
+  } finally {
+    contourSubmitBtn.disabled = false;
+    contourSubmitBtn.textContent = originalLabel;
+  }
 });
 
 /* ====== Acompte (paiement en ligne) ====== */
