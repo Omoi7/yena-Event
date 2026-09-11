@@ -79,7 +79,7 @@ em{font-style:italic; color:var(--gold);}
 .logo{display:flex; align-items:center;}
 .logo-block-img{
   height:64px; width:auto; display:block; border-radius:14px;
-  border:2px solid var(--brown); box-shadow:var(--shadow-md);
+  box-shadow:var(--shadow-md);
 }
 .main-nav{display:flex; gap:28px;}
 .main-nav a{font-size:.92rem; font-weight:500; color:var(--text-soft); position:relative; padding:6px 0;}
