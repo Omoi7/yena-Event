@@ -2,6 +2,13 @@
 
 document.getElementById('year').textContent = new Date().getFullYear();
 
+/** Échappe une valeur avant de l'insérer dans du HTML (innerHTML). */
+function escapeHtml_(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 /* ====== Toast ====== */
 function showToast(msg, duration = 3200) {
   const toast = document.getElementById('toast');
@@ -165,7 +172,7 @@ async function loadGallery_() {
     data.images.forEach((img, i) => {
       const div = document.createElement('div');
       div.className = 'gallery-item' + (i % 5 === 0 ? ' tall' : '');
-      div.innerHTML = `<img src="${img.url}" alt="${img.titre}" loading="lazy"><span>${img.titre}</span>`;
+      div.innerHTML = `<img src="${escapeHtml_(img.url)}" alt="${escapeHtml_(img.titre)}" loading="lazy"><span>${escapeHtml_(img.titre)}</span>`;
       galleryGrid.appendChild(div);
     });
   } catch (err) {
@@ -322,12 +329,12 @@ function renderSummary() {
 
   document.getElementById('summaryBox').innerHTML = `
     <dl>
-      <dt>Prestation</dt><dd>${service ? service.icon + ' ' + service.title : '—'}</dd>
+      <dt>Prestation</dt><dd>${service ? service.icon + ' ' + escapeHtml_(service.title) : '—'}</dd>
       <dt>Date</dt><dd>${dateFmt}</dd>
-      <dt>Invités</dt><dd>${guests || '—'}</dd>
-      <dt>Lieu</dt><dd>${location}</dd>
-      <dt>Budget</dt><dd>${budget}</dd>
-      <dt>Contact</dt><dd>${name} · ${email} · ${phone}</dd>
+      <dt>Invités</dt><dd>${escapeHtml_(guests) || '—'}</dd>
+      <dt>Lieu</dt><dd>${escapeHtml_(location)}</dd>
+      <dt>Budget</dt><dd>${escapeHtml_(budget)}</dd>
+      <dt>Contact</dt><dd>${escapeHtml_(name)} · ${escapeHtml_(email)} · ${escapeHtml_(phone)}</dd>
     </dl>
   `;
 }
@@ -615,18 +622,18 @@ photosForm.addEventListener('submit', async (e) => {
         'error'
       );
     } else {
-      const statutBadge = `<p class="booking-status-badge">Statut de votre dossier : <strong>${data.statutReservation || 'Nouvelle demande'}</strong></p>`;
+      const statutBadge = `<p class="booking-status-badge">Statut de votre dossier : <strong>${escapeHtml_(data.statutReservation) || 'Nouvelle demande'}</strong></p>`;
       if (data.status === 'ready') {
         showPhotosResult_(
           statutBadge +
-          `<h4>📸 Vos photos sont prêtes !</h4><p>${data.service || ''} — ${data.fullName || ''}</p>` +
-          `<a href="${data.driveFolderUrl}" target="_blank" rel="noopener" class="btn btn-primary">Ouvrir mon dossier photos</a>`,
+          `<h4>📸 Vos photos sont prêtes !</h4><p>${escapeHtml_(data.service)} — ${escapeHtml_(data.fullName)}</p>` +
+          `<a href="${encodeURI(data.driveFolderUrl || '')}" target="_blank" rel="noopener" class="btn btn-primary">Ouvrir mon dossier photos</a>`,
           'ready'
         );
       } else {
         showPhotosResult_(
           statutBadge +
-          `<h4>Vos photos arrivent bientôt</h4><p>Votre réservation (${data.service || ''}) est bien enregistrée. Yena Event dépose vos photos après l'évènement : revenez ensuite avec la même référence pour les consulter.</p>`,
+          `<h4>Vos photos arrivent bientôt</h4><p>Votre réservation (${escapeHtml_(data.service)}) est bien enregistrée. Yena Event dépose vos photos après l'évènement : revenez ensuite avec la même référence pour les consulter.</p>`,
           'pending'
         );
       }

@@ -2,6 +2,19 @@
 
 const ADMIN_KEY_STORAGE = 'yena_admin_key';
 
+/**
+ * Échappe une valeur avant de l'insérer dans du HTML (innerHTML). Les
+ * réservations affichées ici proviennent d'un formulaire public non
+ * authentifié : sans cet échappement, un nom/lieu/message piégé pourrait
+ * exécuter du code dans le navigateur de l'admin (vol de la clé admin,
+ * actions arbitraires sur le tableau de bord).
+ */
+function escapeHtml_(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 function showToast(msg, duration = 3200) {
   const toast = document.getElementById('toast');
   toast.textContent = msg;
@@ -108,23 +121,24 @@ function renderBookings_() {
   }
   bookingsBody.innerHTML = latestBookings.map(b => {
     const ready = b.statutPhotos === 'Prêt';
+    const ref = escapeHtml_(b.ref);
     const driveLink = b.driveFolderUrl
-      ? `<a href="${b.driveFolderUrl}" target="_blank" rel="noopener" class="mini-link">Dossier Drive</a>`
+      ? `<a href="${escapeHtml_(b.driveFolderUrl)}" target="_blank" rel="noopener" class="mini-link">Dossier Drive</a>`
       : '—';
     const actionCell = ready
       ? '<span class="status-pill ready">✓ Prêt</span>'
-      : `<button type="button" class="btn-tiny" data-ref="${b.ref}">Marquer prêtes</button>`;
+      : `<button type="button" class="btn-tiny" data-ref="${ref}">Marquer prêtes</button>`;
     const statutActuel = b.statutReservation || 'Nouvelle demande';
-    const options = statutsReservation.map(s => `<option value="${s}" ${s === statutActuel ? 'selected' : ''}>${s}</option>`).join('');
+    const options = statutsReservation.map(s => `<option value="${escapeHtml_(s)}" ${s === statutActuel ? 'selected' : ''}>${escapeHtml_(s)}</option>`).join('');
     return `
       <tr>
-        <td>${b.ref}</td>
-        <td>${b.fullName || '—'}</td>
-        <td>${b.service || '—'}</td>
+        <td>${ref}</td>
+        <td>${escapeHtml_(b.fullName) || '—'}</td>
+        <td>${escapeHtml_(b.service) || '—'}</td>
         <td>${formatDateFr_(b.eventDate)}</td>
-        <td>${b.email || ''}<br><span style="color:var(--text-soft)">${b.phone || ''}</span></td>
-        <td><select class="status-select" data-ref="${b.ref}">${options}</select></td>
-        <td><span class="status-pill ${ready ? 'ready' : 'pending'}">${b.statutPhotos}</span><br>${driveLink}</td>
+        <td>${escapeHtml_(b.email)}<br><span style="color:var(--text-soft)">${escapeHtml_(b.phone)}</span></td>
+        <td><select class="status-select" data-ref="${ref}">${options}</select></td>
+        <td><span class="status-pill ${ready ? 'ready' : 'pending'}">${escapeHtml_(b.statutPhotos)}</span><br>${driveLink}</td>
         <td>${actionCell}</td>
       </tr>
     `;
@@ -254,8 +268,8 @@ async function loadGalleryAdmin_() {
     }
     galleryGridAdmin.innerHTML = data.images.map(img => `
       <div class="admin-gallery-item">
-        <img src="${img.url}" alt="${img.titre}" loading="lazy">
-        <span class="gal-caption">${img.titre}</span>
+        <img src="${escapeHtml_(img.url)}" alt="${escapeHtml_(img.titre)}" loading="lazy">
+        <span class="gal-caption">${escapeHtml_(img.titre)}</span>
         <button type="button" class="gal-delete" data-row="${img.rowIndex}" title="Supprimer">✕</button>
       </div>
     `).join('');
