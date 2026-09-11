@@ -239,6 +239,10 @@
         </div>
 
         <form id="bookingForm" novalidate>
+          <div class="hp-field" aria-hidden="true">
+            <label for="hpBooking">Ne pas remplir ce champ</label>
+            <input type="text" id="hpBooking" tabindex="-1" autocomplete="off">
+          </div>
           <!-- STEP 1 -->
           <fieldset class="form-step active" data-step="1">
             <legend>Quelle prestation souhaitez-vous ?</legend>
@@ -398,6 +402,10 @@
         </div>
       </div>
       <form class="contact-form reveal" id="contactForm">
+        <div class="hp-field" aria-hidden="true">
+          <label for="hpContact">Ne pas remplir ce champ</label>
+          <input type="text" id="hpContact" tabindex="-1" autocomplete="off">
+        </div>
         <div class="field">
           <label for="cName">Nom *</label>
           <input type="text" id="cName" required>
@@ -443,6 +451,10 @@
       <h4>Newsletter</h4>
       <p>Recevez nos inspirations évènementielles.</p>
       <form class="newsletter-form" id="newsletterForm">
+        <div class="hp-field" aria-hidden="true">
+          <label for="hpNewsletter">Ne pas remplir ce champ</label>
+          <input type="text" id="hpNewsletter" tabindex="-1" autocomplete="off">
+        </div>
         <input type="email" id="newsletterEmail" placeholder="Votre email" required>
         <button type="submit">OK</button>
       </form>

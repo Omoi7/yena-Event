@@ -289,6 +289,9 @@ em{font-style:italic; color:var(--gold);}
 
 .form-grid{display:grid; grid-template-columns:1fr 1fr; gap:20px;}
 .field{display:flex; flex-direction:column; gap:6px;}
+/* Champ piège anti-bot : invisible et hors navigation clavier pour un humain,
+   mais présent dans le HTML pour attraper les scripts qui remplissent tout. */
+.hp-field{position:absolute; left:-9999px; top:-9999px; width:1px; height:1px; overflow:hidden;}
 .field-full{grid-column:1/-1;}
 .field label{font-size:.85rem; font-weight:600; color:var(--cream);}
 .field input, .field select, .field textarea{

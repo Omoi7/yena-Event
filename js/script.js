@@ -417,6 +417,7 @@ bookingForm.addEventListener('submit', async (e) => {
     phone: document.getElementById('phone').value,
     message: document.getElementById('message').value,
     createdAt: new Date().toISOString(),
+    hp: document.getElementById('hpBooking').value,
   };
   lastBooking = booking;
 
@@ -542,6 +543,7 @@ document.getElementById('contactForm').addEventListener('submit', async (e) => {
     name: document.getElementById('cName').value,
     email: document.getElementById('cEmail').value,
     message: document.getElementById('cMsg').value,
+    hp: document.getElementById('hpContact').value,
   };
   const result = await sendToBackend_(payload);
 
@@ -568,7 +570,8 @@ document.getElementById('newsletterForm').addEventListener('submit', async (e) =
   btn.textContent = '…';
 
   const email = document.getElementById('newsletterEmail').value;
-  const result = await sendToBackend_({ type: 'newsletter', email });
+  const hp = document.getElementById('hpNewsletter').value;
+  const result = await sendToBackend_({ type: 'newsletter', email, hp });
 
   btn.disabled = false;
   btn.textContent = originalLabel;

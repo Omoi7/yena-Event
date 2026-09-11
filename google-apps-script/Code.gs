@@ -115,9 +115,22 @@ const GALERIE_TAB = 'Galerie';
 const GALERIE_HEADERS = ['Titre', 'URL image', 'Ordre', 'Visible'];
 const GCOL = GALERIE_HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
 
+// Nom de l'onglet des réservations, utilisé pour le retrouver de façon fiable
+// (voir getSheet_ ci-dessous) même si Yena réordonne les onglets du classeur.
+const RESERVATIONS_TAB = 'Réservations (site web)';
+
 function getSheet_() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
-  const sheet = ss.getSheets()[0];
+  // On cible l'onglet par son nom plutôt que par sa position (fiable même si
+  // Yena réordonne les onglets). Si l'onglet n'a pas encore ce nom (classeur
+  // existant, ou tout premier appel après cette mise à jour), on reprend le
+  // comportement historique (1er onglet) puis on le renomme pour que les
+  // appels suivants le retrouvent directement par son nom.
+  let sheet = ss.getSheetByName(RESERVATIONS_TAB);
+  if (!sheet) {
+    sheet = ss.getSheets()[0];
+    try { sheet.setName(RESERVATIONS_TAB); } catch (renameErr) { /* nom déjà pris ailleurs : on continue sans renommer */ }
+  }
   // Écrit ou complète la ligne d'en-têtes (ajoute les nouvelles colonnes sans
   // toucher aux lignes de données existantes) — permet de mettre à jour le
   // script sans jamais avoir à retoucher le Sheet à la main.
@@ -175,6 +188,70 @@ function slugify_(text) {
     .trim() || 'Client';
 }
 
+/* ====== Anti-abus : validation, honeypot, limite de fréquence, verrou ====== */
+
+function isValidEmail_(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || '').trim());
+}
+
+/** Vérifie qu'une chaîne est bien une date au format AAAA-MM-JJ valide. */
+function isValidIsoDate_(s) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(s || ''))) return false;
+  const d = new Date(s + 'T00:00:00');
+  return !isNaN(d.getTime());
+}
+
+/** Coupe une chaîne à une longueur maximale (évite les messages-fleuves envoyés par des scripts). */
+function clampStr_(s, maxLen) {
+  return String(s || '').trim().slice(0, maxLen);
+}
+
+/**
+ * Vrai si un champ piège invisible (honeypot) du formulaire est resté vide,
+ * comme rempli par un humain. Les scripts/bots qui remplissent tous les
+ * champs d'un formulaire le remplissent aussi, ce qui les trahit. On répond
+ * alors un faux succès (sans rien enregistrer ni envoyer) pour ne pas leur
+ * donner d'indice.
+ */
+function isHoneypotTriggered_(data) {
+  return !!String(data.hp || '').trim();
+}
+
+/**
+ * Limite de fréquence simple par fenêtre de temps fixe, sans dépendre de
+ * l'IP de l'appelant (non disponible dans Apps Script) : compte les appels
+ * par "seau" (bucket) sur une fenêtre glissante grossière. Suffisant pour
+ * bloquer un script qui spammerait le formulaire, sans jamais gêner un
+ * usage humain normal du site.
+ */
+function rateLimitOk_(bucket, max, windowSeconds) {
+  const cache = CacheService.getScriptCache();
+  const key = 'rl_' + bucket + '_' + Math.floor(Date.now() / (windowSeconds * 1000));
+  const current = Number(cache.get(key) || 0);
+  if (current >= max) return false;
+  cache.put(key, String(current + 1), windowSeconds + 5);
+  return true;
+}
+
+/**
+ * Exécute `fn` sous un verrou global au script, pour éviter que deux
+ * requêtes simultanées (double clic, deux onglets admin ouverts en même
+ * temps…) ne se marchent dessus en lisant/modifiant le Sheet en parallèle.
+ */
+function withLock_(fn) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (err) {
+    return jsonOut_({ ok: false, error: 'busy' });
+  }
+  try {
+    return fn();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
@@ -198,6 +275,7 @@ function doPost(e) {
 function handleCheckAvailability_(data) {
   const date = String(data.date || '').trim();
   if (!date) return jsonOut_({ ok: false, error: 'missing_field' });
+  if (!rateLimitOk_('availability', 60, 60)) return jsonOut_({ ok: false, error: 'rate_limited' });
 
   const values = getSheet_().getDataRange().getValues();
   const taken = values.slice(1).some(r => {
@@ -216,6 +294,11 @@ function isAdminAuthorized_(data) {
 }
 
 function handleAdminAuth_(data) {
+  // Limite le nombre de tentatives de connexion (essai du mot de passe) sur
+  // une fenêtre de temps, pour rendre une attaque par force brute
+  // impraticable, sans jamais gêner un usage normal (une poignée de
+  // connexions par jour au maximum).
+  if (!rateLimitOk_('adminAuthAttempt', 8, 300)) return jsonOut_({ ok: false, error: 'rate_limited' });
   if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
   return jsonOut_({ ok: true });
 }
@@ -251,15 +334,17 @@ function handleAdminUpdateBookingStatus_(data) {
   if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
   if (!STATUTS_RESERVATION.includes(data.statut)) return jsonOut_({ ok: false, error: 'invalid_status' });
 
-  const sheet = getSheet_();
-  const values = sheet.getDataRange().getValues();
-  for (let i = 1; i < values.length; i++) {
-    if (String(values[i][COL['Référence']]).trim() === String(data.ref).trim()) {
-      sheet.getRange(i + 1, COL['Statut réservation'] + 1).setValue(data.statut);
-      return jsonOut_({ ok: true });
+  return withLock_(() => {
+    const sheet = getSheet_();
+    const values = sheet.getDataRange().getValues();
+    for (let i = 1; i < values.length; i++) {
+      if (String(values[i][COL['Référence']]).trim() === String(data.ref).trim()) {
+        sheet.getRange(i + 1, COL['Statut réservation'] + 1).setValue(data.statut);
+        return jsonOut_({ ok: true });
+      }
     }
-  }
-  return jsonOut_({ ok: false, error: 'not_found' });
+    return jsonOut_({ ok: false, error: 'not_found' });
+  });
 }
 
 /** Extrait un ID de fichier Drive plausible depuis un lien de partage ou un ID brut collé par Yena. */
@@ -274,24 +359,28 @@ function driveImageUrlFromInput_(input) {
 function handleAdminAddGalleryImage_(data) {
   if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
 
-  const titre = String(data.titre || '').trim();
+  const titre = clampStr_(data.titre, 200);
   const lien = String(data.lien || '').trim();
   if (!titre || !lien) return jsonOut_({ ok: false, error: 'missing_field' });
 
-  const sheet = getGalerieSheet_();
-  const ordre = sheet.getLastRow();
-  sheet.appendRow([titre, driveImageUrlFromInput_(lien), ordre, 'Oui']);
-  return jsonOut_({ ok: true });
+  return withLock_(() => {
+    const sheet = getGalerieSheet_();
+    const ordre = sheet.getLastRow();
+    sheet.appendRow([titre, driveImageUrlFromInput_(lien), ordre, 'Oui']);
+    return jsonOut_({ ok: true });
+  });
 }
 
 function handleAdminDeleteGalleryImage_(data) {
   if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
 
-  const rowIndex = Number(data.rowIndex);
-  const sheet = getGalerieSheet_();
-  if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) return jsonOut_({ ok: false, error: 'not_found' });
-  sheet.deleteRow(rowIndex);
-  return jsonOut_({ ok: true });
+  return withLock_(() => {
+    const rowIndex = Number(data.rowIndex);
+    const sheet = getGalerieSheet_();
+    if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) return jsonOut_({ ok: false, error: 'not_found' });
+    sheet.deleteRow(rowIndex);
+    return jsonOut_({ ok: true });
+  });
 }
 
 /** Liste publique des images de la galerie (pas d'authentification requise, contenu non sensible). */
@@ -319,15 +408,17 @@ function formatDateForJson_(v) {
 function handleAdminMarkPhotosReady_(data) {
   if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
 
-  const sheet = getSheet_();
-  const values = sheet.getDataRange().getValues();
-  for (let i = 1; i < values.length; i++) {
-    if (String(values[i][COL['Référence']]).trim() === String(data.ref).trim()) {
-      sheet.getRange(i + 1, COL['Statut photos'] + 1).setValue('Prêt');
-      return jsonOut_({ ok: true });
+  return withLock_(() => {
+    const sheet = getSheet_();
+    const values = sheet.getDataRange().getValues();
+    for (let i = 1; i < values.length; i++) {
+      if (String(values[i][COL['Référence']]).trim() === String(data.ref).trim()) {
+        sheet.getRange(i + 1, COL['Statut photos'] + 1).setValue('Prêt');
+        return jsonOut_({ ok: true });
+      }
     }
-  }
-  return jsonOut_({ ok: false, error: 'not_found' });
+    return jsonOut_({ ok: false, error: 'not_found' });
+  });
 }
 
 /** Envoi immédiat d'une newsletter depuis la page admin (sans attendre le déclencheur quotidien). */
@@ -345,32 +436,46 @@ function handleAdminSendNewsletter_(data) {
 
 /** Inscription à la newsletter depuis le formulaire du site. */
 function handleNewsletterSignup_(data) {
+  if (isHoneypotTriggered_(data)) return jsonOut_({ ok: true }); // piège anti-bot : faux succès
+
   const email = String(data.email || '').trim().toLowerCase();
   if (!email) return jsonOut_({ ok: false, error: 'missing_field', field: 'email' });
+  if (!isValidEmail_(email)) return jsonOut_({ ok: false, error: 'invalid_email' });
+  if (!rateLimitOk_('newsletter', 10, 60)) return jsonOut_({ ok: false, error: 'rate_limited' });
 
-  const sheet = getAbonnesSheet_();
-  const values = sheet.getDataRange().getValues();
-  for (let i = 1; i < values.length; i++) {
-    if (String(values[i][ACOL['Email']]).trim().toLowerCase() === email) {
-      sheet.getRange(i + 1, ACOL['Désabonné'] + 1).setValue(''); // ré-inscrit si désabonné
-      return jsonOut_({ ok: true, alreadySubscribed: true });
+  return withLock_(() => {
+    const sheet = getAbonnesSheet_();
+    const values = sheet.getDataRange().getValues();
+    for (let i = 1; i < values.length; i++) {
+      if (String(values[i][ACOL['Email']]).trim().toLowerCase() === email) {
+        sheet.getRange(i + 1, ACOL['Désabonné'] + 1).setValue(''); // ré-inscrit si désabonné
+        return jsonOut_({ ok: true, alreadySubscribed: true });
+      }
     }
-  }
-  sheet.appendRow([email, '', new Date(), 'Site (newsletter)', '']);
-  return jsonOut_({ ok: true });
+    sheet.appendRow([email, '', new Date(), 'Site (newsletter)', '']);
+    return jsonOut_({ ok: true });
+  });
 }
 
 /** Message envoyé depuis le formulaire de contact du site. */
 function handleContact_(data) {
+  if (isHoneypotTriggered_(data)) return jsonOut_({ ok: true }); // piège anti-bot : faux succès
+
   if (!data.name || !data.email || !data.message) {
     return jsonOut_({ ok: false, error: 'missing_field' });
   }
-  GmailApp.sendEmail(OWNER_EMAIL, `Nouveau message via le site — ${data.name}`, [
-    `Nom : ${data.name}`,
+  if (!isValidEmail_(data.email)) return jsonOut_({ ok: false, error: 'invalid_email' });
+  if (!rateLimitOk_('contact', 10, 60)) return jsonOut_({ ok: false, error: 'rate_limited' });
+
+  const name = clampStr_(data.name, 200);
+  const message = clampStr_(data.message, 3000);
+
+  GmailApp.sendEmail(OWNER_EMAIL, `Nouveau message via le site — ${name}`, [
+    `Nom : ${name}`,
     `Email : ${data.email}`,
     '',
     'Message :',
-    data.message,
+    message,
   ].join('\n'), { replyTo: data.email, name: 'Site Yena Event' });
 
   return jsonOut_({ ok: true });
@@ -382,64 +487,89 @@ function handleBooking_(data) {
   for (const key of required) {
     if (!data[key]) return jsonOut_({ ok: false, error: 'missing_field', field: key });
   }
-
-  const sheet = getSheet_();
-
-  // Idempotence : si la référence existe déjà, on renvoie les infos existantes
-  // sans rien recréer ni renvoyer d'email en double.
-  const existing = findRowByRef_(sheet, data.ref);
-  if (existing) {
-    return jsonOut_({
-      ok: true,
-      ref: data.ref,
-      calendarEventUrl: existing[COL['Lien évènement Calendar']],
-      driveFolderUrl: existing[COL['Lien dossier Drive']],
-    });
+  if (isHoneypotTriggered_(data)) {
+    // Piège anti-bot déclenché : faux succès, rien n'est créé ni envoyé.
+    return jsonOut_({ ok: true, ref: data.ref, calendarEventUrl: '', driveFolderUrl: '' });
   }
+  if (!isValidEmail_(data.email)) return jsonOut_({ ok: false, error: 'invalid_email' });
+  if (!isValidIsoDate_(data.eventDate)) return jsonOut_({ ok: false, error: 'invalid_date' });
+  const guestsNum = parseInt(data.guests, 10);
+  if (!Number.isFinite(guestsNum) || guestsNum < 1 || guestsNum > 5000) {
+    return jsonOut_({ ok: false, error: 'invalid_guests' });
+  }
+  if (!rateLimitOk_('booking', 20, 60)) return jsonOut_({ ok: false, error: 'rate_limited' });
 
-  // --- Google Calendar : création de l'évènement (journée entière) ---
-  const eventDate = new Date(data.eventDate + 'T00:00:00');
-  const title = `${data.service} — ${data.fullName}`;
-  const description = [
-    `Référence : ${data.ref}`,
-    `Invités : ${data.guests}`,
-    `Lieu : ${data.location || 'non précisé'}`,
-    `Budget : ${data.budget || 'non précisé'}`,
-    `Téléphone : ${data.phone}`,
-    `Email : ${data.email}`,
-    data.message ? `Message : ${data.message}` : '',
-  ].filter(Boolean).join('\n');
-
-  const calendar = CalendarApp.getDefaultCalendar();
-  const calEvent = calendar.createAllDayEvent(title, eventDate, {
-    description,
-    location: data.location || '',
+  // Textes libres bornés en longueur, pour éviter qu'un script n'enregistre
+  // des messages-fleuves dans le Sheet et les emails.
+  data = Object.assign({}, data, {
+    guests: guestsNum,
+    fullName: clampStr_(data.fullName, 200),
+    service: clampStr_(data.service, 200),
+    location: clampStr_(data.location, 300),
+    budget: clampStr_(data.budget, 100),
+    message: clampStr_(data.message, 3000),
+    phone: clampStr_(data.phone, 40),
   });
 
-  // --- Google Drive : création du dossier client dans "Événements" ---
-  const folderName = `${data.eventDate}_${slugify_(data.fullName.split(' ')[0])}_${slugify_(data.service)}`;
-  const parentFolder = DriveApp.getFolderById(EVENTS_FOLDER_ID);
-  const clientFolder = parentFolder.createFolder(folderName);
-  try {
-    clientFolder.addViewer(data.email);
-  } catch (shareErr) {
-    // L'email peut être invalide ou déjà propriétaire : on ignore sans bloquer la réservation.
-  }
+  return withLock_(() => {
+    const sheet = getSheet_();
 
-  const calendarEventUrl = buildCalendarEventUrl_(calEvent.getId(), calendar.getId());
-  const driveFolderUrl = clientFolder.getUrl();
+    // Idempotence : si la référence existe déjà, on renvoie les infos existantes
+    // sans rien recréer ni renvoyer d'email en double.
+    const existing = findRowByRef_(sheet, data.ref);
+    if (existing) {
+      return jsonOut_({
+        ok: true,
+        ref: data.ref,
+        calendarEventUrl: existing[COL['Lien évènement Calendar']],
+        driveFolderUrl: existing[COL['Lien dossier Drive']],
+      });
+    }
 
-  // --- Enregistrement dans le tableau ---
-  sheet.appendRow([
-    data.ref, new Date(), data.service, data.eventDate, data.guests,
-    data.location || '', data.budget || '', data.fullName, data.email, data.phone,
-    data.message || '', 'En attente', clientFolder.getId(), driveFolderUrl,
-    calEvent.getId(), calendarEventUrl, '', 'Nouvelle demande', '',
-  ]);
+    // --- Google Calendar : création de l'évènement (journée entière) ---
+    const eventDate = new Date(data.eventDate + 'T00:00:00');
+    const title = `${data.service} — ${data.fullName}`;
+    const description = [
+      `Référence : ${data.ref}`,
+      `Invités : ${data.guests}`,
+      `Lieu : ${data.location || 'non précisé'}`,
+      `Budget : ${data.budget || 'non précisé'}`,
+      `Téléphone : ${data.phone}`,
+      `Email : ${data.email}`,
+      data.message ? `Message : ${data.message}` : '',
+    ].filter(Boolean).join('\n');
 
-  sendBookingEmails_(data, calendarEventUrl, driveFolderUrl);
+    const calendar = CalendarApp.getDefaultCalendar();
+    const calEvent = calendar.createAllDayEvent(title, eventDate, {
+      description,
+      location: data.location || '',
+    });
 
-  return jsonOut_({ ok: true, ref: data.ref, calendarEventUrl, driveFolderUrl });
+    // --- Google Drive : création du dossier client dans "Événements" ---
+    const folderName = `${data.eventDate}_${slugify_(data.fullName.split(' ')[0])}_${slugify_(data.service)}`;
+    const parentFolder = DriveApp.getFolderById(EVENTS_FOLDER_ID);
+    const clientFolder = parentFolder.createFolder(folderName);
+    try {
+      clientFolder.addViewer(data.email);
+    } catch (shareErr) {
+      // L'email peut être invalide ou déjà propriétaire : on ignore sans bloquer la réservation.
+    }
+
+    const calendarEventUrl = buildCalendarEventUrl_(calEvent.getId(), calendar.getId());
+    const driveFolderUrl = clientFolder.getUrl();
+
+    // --- Enregistrement dans le tableau ---
+    sheet.appendRow([
+      data.ref, new Date(), data.service, data.eventDate, data.guests,
+      data.location || '', data.budget || '', data.fullName, data.email, data.phone,
+      data.message || '', 'En attente', clientFolder.getId(), driveFolderUrl,
+      calEvent.getId(), calendarEventUrl, '', 'Nouvelle demande', '',
+    ]);
+
+    sendBookingEmails_(data, calendarEventUrl, driveFolderUrl);
+
+    return jsonOut_({ ok: true, ref: data.ref, calendarEventUrl, driveFolderUrl });
+  });
 }
 
 /** Email de confirmation au client + notification à Yena pour chaque nouvelle demande. */
