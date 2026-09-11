@@ -149,16 +149,24 @@ function renderBookings_() {
     const montant = Number(b.montantDevis) || 0;
     const acompte = montant > 0 ? Math.round(montant * depositPercent * 100) / 100 : 0;
     let depositCell = `<input type="number" min="0" step="1" class="quote-input" data-ref="${ref}" placeholder="Montant devis €" value="${montant || ''}">`;
+    if (b.reductionSpeciale > 0) {
+      depositCell += `<br><span class="status-pill pending" title="Fidélité et/ou parrainage">🎁 -${b.reductionSpeciale}% à appliquer au prochain devis</span>`;
+    }
     if (montant > 0) {
       depositCell += b.acomptePaye
         ? `<br><span class="status-pill ready">✓ Acompte payé (${acompte} €)</span>`
         : `<br><span class="status-pill pending">Acompte dû : ${acompte} €</span><br><button type="button" class="btn-tiny mark-paid-btn" data-ref="${ref}">Marquer payé</button>`;
     }
 
+    const badges = [];
+    if (b.typeClient) badges.push(`<span class="status-pill pending">${escapeHtml_(b.typeClient)}</span>`);
+    if (b.nbReservations > 1) badges.push(`<span class="status-pill ready" title="Réservations passées avec cet email">🔁 ${b.nbReservations}ᵉ réservation</span>`);
+    const clientBadges = badges.length ? `<br>${badges.join(' ')}` : '';
+
     return `
       <tr>
         <td>${ref}</td>
-        <td>${escapeHtml_(b.fullName) || '—'}</td>
+        <td>${escapeHtml_(b.fullName) || '—'}${clientBadges}</td>
         <td>${escapeHtml_(b.service) || '—'}</td>
         <td>${formatDateFr_(b.eventDate)}</td>
         <td>${escapeHtml_(b.email)}<br><span style="color:var(--text-soft)">${escapeHtml_(b.phone)}</span></td>
@@ -188,7 +196,43 @@ async function loadBookings_() {
   document.getElementById('statPending').textContent = latestBookings.filter(b => b.statutPhotos !== 'Prêt').length;
   document.getElementById('statSubscribers').textContent = result.abonnesCount || 0;
   document.getElementById('nlRecipientCount').textContent = result.abonnesCount || 0;
+  updateExtraStats_();
   renderBookings_();
+}
+
+/** Calcule les statistiques supplémentaires (demandes du mois, évènements à venir, acomptes encaissés, conversion) à partir des réservations déjà chargées. */
+function updateExtraStats_() {
+  const now = new Date();
+  const thisMonthCount = latestBookings.filter(b => {
+    if (!b.dateDemande) return false;
+    const d = new Date(b.dateDemande);
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+  }).length;
+
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const upcomingCount = latestBookings.filter(b => {
+    if (b.statutReservation !== 'Confirmé' || !b.eventDate) return false;
+    const d = new Date(b.eventDate);
+    return d >= today;
+  }).length;
+
+  let quotedCount = 0, paidCount = 0, depositsCollected = 0;
+  latestBookings.forEach(b => {
+    const montant = Number(b.montantDevis) || 0;
+    if (montant > 0) {
+      quotedCount++;
+      if (b.acomptePaye) {
+        paidCount++;
+        depositsCollected += Math.round(montant * depositPercent * 100) / 100;
+      }
+    }
+  });
+  const conversionRate = quotedCount ? Math.round((paidCount / quotedCount) * 100) : 0;
+
+  document.getElementById('statThisMonth').textContent = thisMonthCount;
+  document.getElementById('statUpcoming').textContent = upcomingCount;
+  document.getElementById('statDepositsCollected').textContent = `${Math.round(depositsCollected)} €`;
+  document.getElementById('statConversionRate').textContent = `${conversionRate}%`;
 }
 
 refreshBtn.addEventListener('click', loadBookings_);
@@ -206,6 +250,7 @@ bookingsBody.addEventListener('click', async (e) => {
     showToast(`Acompte marqué payé pour ${ref}.`);
     const booking = latestBookings.find(b => b.ref === ref);
     if (booking) booking.acomptePaye = true;
+    updateExtraStats_();
     renderBookings_();
     return;
   }
@@ -245,8 +290,15 @@ bookingsBody.addEventListener('change', async (e) => {
     if (!result.ok) { showToast('Erreur, réessayez.'); return; }
 
     const booking = latestBookings.find(b => b.ref === ref);
-    if (booking) booking.montantDevis = montant;
-    showToast(`Montant du devis enregistré pour ${ref}.`);
+    const montantFinal = result.montant != null ? result.montant : montant;
+    if (booking) {
+      booking.montantDevis = montantFinal;
+      if (result.reductionAppliquee) booking.reductionSpeciale = 0;
+    }
+    showToast(result.reductionAppliquee
+      ? `Devis enregistré pour ${ref} : ${montantFinal} € (réduction de ${result.reductionAppliquee}% déjà appliquée).`
+      : `Montant du devis enregistré pour ${ref}.`);
+    updateExtraStats_();
     renderBookings_();
     return;
   }

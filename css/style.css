@@ -305,6 +305,7 @@ em{font-style:italic; color:var(--gold);}
 .field-hint{font-size:.78rem; margin:2px 0 0; font-weight:600;}
 .field-hint.taken{color:#ffb4a3;}
 .field-hint.free{color:#8fd6a3;}
+.field-hint-neutral{font-weight:400; opacity:.75;}
 @media(max-width:640px){.form-grid,.option-grid{grid-template-columns:1fr;}}
 
 .summary-box{background:rgba(251,247,239,.08); border-radius:var(--radius-sm); padding:20px 22px; margin-bottom:20px; font-size:.92rem;}
@@ -323,6 +324,7 @@ em{font-style:italic; color:var(--gold);}
   font-size:1.6rem; font-weight:700; display:flex; align-items:center; justify-content:center; margin:0 auto 20px;
 }
 .email-note{color:var(--gold); font-size:.88rem; font-weight:600; margin-bottom:8px;}
+.referral-note{font-size:.85rem; opacity:.85; margin:10px 0;}
 .booking-success h3{color:var(--cream);}
 .booking-success p{color:rgba(251,247,239,.8);}
 .booking-success strong{color:var(--gold);}
@@ -404,7 +406,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .photos-result h4{margin:0 0 8px; font-family:var(--font-body); font-weight:600; color:inherit;}
 .booking-status-badge{font-size:.82rem; color:var(--text-soft); margin:0 0 14px; padding-bottom:14px; border-bottom:1px solid rgba(82,49,27,.12);}
 .booking-status-badge strong{color:var(--brown);}
-.photos-result .btn{margin-top:12px;}
+.photos-result .btn{margin-top:12px; margin-right:10px;}
+.suivi-history-title{margin:18px 0 6px; font-weight:600; color:var(--brown); font-size:.85rem;}
+.suivi-history-list{margin:0; padding-left:20px; font-size:.85rem; color:var(--text-soft);}
+.suivi-history-list li{margin-bottom:4px;}
 .spinner{
   display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,.4);
   border-top-color:#fff; border-radius:50%; animation:spin .7s linear infinite; margin-right:8px; vertical-align:-3px;

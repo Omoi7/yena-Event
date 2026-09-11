@@ -46,7 +46,7 @@ const revealObserver = new IntersectionObserver((entries) => {
 document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
 
 /* ====== Navigation par onglets (sections) ====== */
-const TAB_IDS = ['accueil', 'apropos', 'prestations', 'process', 'catalogue', 'galerie', 'avis', 'reservation', 'acompte', 'photos', 'faq', 'contact'];
+const TAB_IDS = ['accueil', 'apropos', 'prestations', 'process', 'catalogue', 'galerie', 'avis', 'reservation', 'suivi', 'acompte', 'photos', 'faq', 'contact'];
 const tabBar = document.getElementById('tabBar');
 
 function activateTab_(id, opts = {}) {
@@ -436,6 +436,8 @@ function renderSummary() {
   const name = document.getElementById('fullName').value;
   const email = document.getElementById('email').value;
   const phone = document.getElementById('phone').value;
+  const typeClient = document.getElementById('typeClient').value;
+  const referralRef = document.getElementById('referralRef').value.trim();
   const dateFmt = date ? new Date(date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
 
   document.getElementById('summaryBox').innerHTML = `
@@ -446,6 +448,8 @@ function renderSummary() {
       <dt>Lieu</dt><dd>${escapeHtml_(location)}</dd>
       <dt>Budget</dt><dd>${escapeHtml_(budget)}</dd>
       <dt>Contact</dt><dd>${escapeHtml_(name)} · ${escapeHtml_(email)} · ${escapeHtml_(phone)}</dd>
+      ${typeClient ? `<dt>Profil</dt><dd>${escapeHtml_(typeClient)}</dd>` : ''}
+      ${referralRef ? `<dt>Parrainage</dt><dd>${escapeHtml_(referralRef)}</dd>` : ''}
     </dl>
   `;
 }
@@ -527,6 +531,8 @@ bookingForm.addEventListener('submit', async (e) => {
     email: document.getElementById('email').value,
     phone: document.getElementById('phone').value,
     message: document.getElementById('message').value,
+    typeClient: document.getElementById('typeClient').value,
+    referralRef: document.getElementById('referralRef').value.trim(),
     createdAt: new Date().toISOString(),
     hp: document.getElementById('hpBooking').value,
   };
@@ -760,6 +766,84 @@ photosForm.addEventListener('submit', async (e) => {
     photosSubmitBtn.disabled = false;
     photosSubmitBtn.textContent = originalLabel;
   }
+});
+
+/* ====== Mon suivi (statut, calendrier, historique) ====== */
+const suiviForm = document.getElementById('suiviForm');
+const suiviResult = document.getElementById('suiviResult');
+const suiviSubmitBtn = document.getElementById('suiviSubmitBtn');
+
+function showSuiviResult_(html, state) {
+  suiviResult.className = 'photos-result state-' + state;
+  suiviResult.innerHTML = html;
+  suiviResult.hidden = false;
+}
+
+async function checkBookingStatus_(ref, email) {
+  const originalLabel = suiviSubmitBtn.textContent;
+  suiviSubmitBtn.disabled = true;
+  suiviSubmitBtn.innerHTML = '<span class="spinner"></span>Recherche…';
+
+  const data = await sendToBackend_({ type: 'getBookingStatus', ref, email });
+
+  suiviSubmitBtn.disabled = false;
+  suiviSubmitBtn.textContent = originalLabel;
+
+  if (!data.ok) {
+    showSuiviResult_(`<h4>Aucune réservation trouvée</h4><p>Vérifiez votre référence et l'email utilisé lors de la réservation, ou contactez-nous directement.</p>`, 'error');
+    return;
+  }
+
+  const parts = [];
+  parts.push(`<p class="booking-status-badge">Statut : <strong>${escapeHtml_(data.statutReservation)}</strong></p>`);
+  parts.push(`<h4>${escapeHtml_(data.service)}</h4>`);
+  parts.push(`<p>Évènement du ${escapeHtml_(data.eventDate)}${data.location ? ' — ' + escapeHtml_(data.location) : ''}</p>`);
+
+  if (data.statutReservation === 'Confirmé' && data.calendarAddUrl) {
+    parts.push(`<a href="${encodeURI(data.calendarAddUrl)}" target="_blank" rel="noopener" class="btn btn-outline">📅 Ajouter à mon calendrier</a>`);
+  }
+
+  if (data.montantDevis) {
+    parts.push(`<p>Devis : <strong>${escapeHtml_(data.montantDevis)} €</strong> — Acompte (${Math.round((data.depositPercent || 0.3) * 100)}%) : <strong>${escapeHtml_(data.montantAcompte)} €</strong> ${data.acomptePaye ? '— ✓ réglé' : '— en attente'}</p>`);
+    if (!data.acomptePaye) {
+      parts.push(`<a href="#acompte" class="btn btn-primary suivi-goto-tab">Régler mon acompte</a>`);
+    }
+  }
+
+  if (data.statutPhotos === 'Prêt') {
+    parts.push(`<a href="#photos" class="btn btn-outline suivi-goto-tab">📸 Voir mes photos</a>`);
+  }
+
+  if (data.history && data.history.length > 1) {
+    const items = data.history.map(h =>
+      `<li>${escapeHtml_(h.eventDate)} — ${escapeHtml_(h.service)} (${escapeHtml_(h.statutReservation)})</li>`
+    ).join('');
+    parts.push(`<p class="suivi-history-title">Vos réservations avec Yena Event :</p><ul class="suivi-history-list">${items}</ul>`);
+  }
+
+  showSuiviResult_(parts.join(''), 'ready');
+
+  suiviResult.querySelectorAll('.suivi-goto-tab').forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      activateTab_(link.getAttribute('href').slice(1));
+      if (link.getAttribute('href') === '#acompte') {
+        document.getElementById('depositRef').value = ref;
+        document.getElementById('depositEmail').value = email;
+      } else {
+        document.getElementById('photosRef').value = ref;
+        document.getElementById('photosEmail').value = email;
+      }
+    });
+  });
+}
+
+suiviForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const ref = document.getElementById('suiviRef').value.trim();
+  const email = document.getElementById('suiviEmail').value.trim();
+  if (!ref || !email) return;
+  checkBookingStatus_(ref, email);
 });
 
 /* ====== Acompte (paiement en ligne) ====== */

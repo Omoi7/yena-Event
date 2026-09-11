@@ -38,6 +38,7 @@
   <button type="button" class="tab-btn" data-tab="galerie" role="tab" aria-selected="false">Galerie</button>
   <button type="button" class="tab-btn" data-tab="avis" role="tab" aria-selected="false">Avis</button>
   <button type="button" class="tab-btn" data-tab="reservation" role="tab" aria-selected="false">Réservation</button>
+  <button type="button" class="tab-btn" data-tab="suivi" role="tab" aria-selected="false">Mon suivi</button>
   <button type="button" class="tab-btn" data-tab="acompte" role="tab" aria-selected="false">Acompte</button>
   <button type="button" class="tab-btn" data-tab="photos" role="tab" aria-selected="false">Mes photos</button>
   <button type="button" class="tab-btn" data-tab="faq" role="tab" aria-selected="false">FAQ</button>
@@ -302,6 +303,19 @@
                 <input type="tel" id="phone" name="phone" placeholder="06 00 00 00 00" autocomplete="tel" required>
                 <p class="field-error" id="err-phone"></p>
               </div>
+              <div class="field">
+                <label for="typeClient">Vous êtes</label>
+                <select id="typeClient" name="typeClient">
+                  <option value="">Sélectionner…</option>
+                  <option value="Particulier">Un particulier</option>
+                  <option value="Entreprise">Une entreprise</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="referralRef">Parrainé par (facultatif)</label>
+                <input type="text" id="referralRef" name="referralRef" placeholder="Référence de réservation du parrain">
+                <p class="field-hint field-hint-neutral">Vous et la personne qui vous a recommandé(e) bénéficierez chacun d'une réduction dès votre réservation confirmée.</p>
+              </div>
               <div class="field field-full">
                 <label for="message">Message (optionnel)</label>
                 <textarea id="message" name="message" rows="3" placeholder="Précisez vos envies, thème, contraintes particulières…"></textarea>
@@ -333,6 +347,7 @@
           <p>Référence de votre demande : <strong id="refNumber"></strong> <button type="button" class="copy-btn" id="copyRefBtn" title="Copier la référence">📋</button></p>
           <p>Notre équipe revient vers vous sous 48h à l'adresse indiquée pour finaliser votre devis et confirmer la prestation. Conservez votre référence : elle vous permettra de retrouver vos photos après l'évènement.</p>
           <p class="email-note" id="emailNote" hidden>✉️ Un email de confirmation vient de vous être envoyé.</p>
+          <p class="referral-note">🎁 Parrainez vos proches : donnez-leur votre référence, ils bénéficient d'une réduction en l'indiquant lors de leur réservation — et vous aussi dès que leur réservation est confirmée !</p>
           <div class="success-actions">
             <button type="button" class="btn btn-outline" id="addGoogleCalBtn">📅 Ajouter à Google Calendar</button>
             <button type="button" class="btn btn-outline" id="downloadIcsBtn">⬇️ Télécharger le .ics</button>
@@ -342,6 +357,31 @@
             <button type="button" class="btn btn-primary" id="newRequestBtn">Faire une nouvelle demande</button>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MON SUIVI -->
+  <section id="suivi" class="section tab-panel" hidden>
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">Après votre demande</p>
+        <h2>Suivez votre réservation</h2>
+        <p class="section-sub">Indiquez votre référence et votre email pour voir où en est votre dossier : statut, date, devis, acompte, et vos éventuelles réservations passées avec nous.</p>
+      </div>
+      <div class="photos-card reveal">
+        <form id="suiviForm" class="photos-form" novalidate>
+          <div class="field">
+            <label for="suiviRef">Référence de réservation *</label>
+            <input type="text" id="suiviRef" placeholder="Ex : YE-M8X2K1" required>
+          </div>
+          <div class="field">
+            <label for="suiviEmail">Email utilisé pour la réservation *</label>
+            <input type="email" id="suiviEmail" placeholder="vous@exemple.com" autocomplete="email" required>
+          </div>
+          <button type="submit" class="btn btn-primary" id="suiviSubmitBtn">Voir mon suivi</button>
+        </form>
+        <div class="photos-result" id="suiviResult" hidden></div>
       </div>
     </div>
   </section>

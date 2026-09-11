@@ -155,6 +155,20 @@ const DELAI_RAPPEL_JOURS = 7;
 // Nombre de jours après l'envoi d'un devis (sans acompte réglé) avant la relance automatique.
 const DELAI_RELANCE_ACOMPTE_JOURS = 5;
 
+// Nombre de jours après la date de l'évènement avant l'envoi de l'enquête de
+// satisfaction privée (distincte de la demande d'avis Google publique).
+const DELAI_ENQUETE_JOURS = 1;
+
+// Réduction (en %) créditée automatiquement sur le PROCHAIN devis saisi :
+//  - au parrain ET au filleul, dès que la réservation du filleul est confirmée
+//    (programme de parrainage) ;
+//  - au client, dès sa 2e réservation détectée (fidélité).
+// Les deux se cumulent si applicables. Appliquée automatiquement par
+// `handleAdminSetQuoteAmount_` sur le prochain devis saisi pour la réservation
+// concernée, puis remise à zéro.
+const REFERRAL_DISCOUNT_PERCENT = 10;
+const LOYALTY_DISCOUNT_PERCENT = 10;
+
 // Statuts possibles pour le suivi d'une réservation (colonne "Statut réservation").
 const STATUTS_RESERVATION = ['Nouvelle demande', 'Devis envoyé', 'Confirmé', 'Terminé'];
 
@@ -173,6 +187,8 @@ const HEADERS = [
   'Avis demandé', 'Statut réservation', 'Rappel envoyé',
   'Montant devis (€)', 'Acompte payé', 'Stripe Session ID',
   'Devis envoyé le', 'Relance acompte envoyée',
+  'Type client', 'Parrainé par (référence)', 'Parrainage traité',
+  'Réduction spéciale à appliquer (%)', 'Enquête envoyée',
 ];
 
 const COL = HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
@@ -342,6 +358,7 @@ function doPost(e) {
     if (data.type === 'adminSetQuoteAmount') return handleAdminSetQuoteAmount_(data);
     if (data.type === 'adminMarkDepositPaid') return handleAdminMarkDepositPaid_(data);
     if (data.type === 'depositStatus') return handleDepositStatus_(data);
+    if (data.type === 'getBookingStatus') return handleBookingStatus_(data);
     if (data.type === 'createDepositCheckout') return handleCreateDepositCheckout_(data);
     if (data.type === 'confirmDepositPayment') return handleConfirmDepositPayment_(data);
     return handleBooking_(data);
@@ -387,10 +404,19 @@ function handleAdminList_(data) {
   if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
 
   const values = getSheet_().getDataRange().getValues();
-  const bookings = values.slice(1)
-    .filter(r => r[COL['Référence']])
+  const rows = values.slice(1).filter(r => r[COL['Référence']]);
+
+  // Nombre de réservations par email, pour détecter/afficher les clients récurrents.
+  const countByEmail = {};
+  rows.forEach(r => {
+    const email = String(r[COL['Email']] || '').trim().toLowerCase();
+    if (email) countByEmail[email] = (countByEmail[email] || 0) + 1;
+  });
+
+  const bookings = rows
     .map(r => ({
       ref: r[COL['Référence']],
+      dateDemande: formatDateForJson_(r[COL['Date de la demande']]),
       service: r[COL['Prestation']],
       eventDate: formatDateForJson_(r[COL['Date évènement']]),
       guests: r[COL['Invités']],
@@ -403,6 +429,9 @@ function handleAdminList_(data) {
       driveFolderUrl: r[COL['Lien dossier Drive']],
       montantDevis: r[COL['Montant devis (€)']] || '',
       acomptePaye: String(r[COL['Acompte payé']]).trim().toLowerCase() === 'oui',
+      typeClient: r[COL['Type client']] || '',
+      nbReservations: countByEmail[String(r[COL['Email']] || '').trim().toLowerCase()] || 1,
+      reductionSpeciale: Number(r[COL['Réduction spéciale à appliquer (%)']]) || 0,
     }))
     .reverse();
 
@@ -424,6 +453,7 @@ function handleAdminUpdateBookingStatus_(data) {
         sheet.getRange(i + 1, COL['Statut réservation'] + 1).setValue(data.statut);
         if (data.statut === 'Confirmé' && ancienStatut !== 'Confirmé') {
           sendBookingConfirmedEmail_(values[i]);
+          processReferral_(sheet, values, i);
         }
         return jsonOut_({ ok: true });
       }
@@ -443,13 +473,19 @@ function handleAdminSetQuoteAmount_(data) {
     const values = sheet.getDataRange().getValues();
     for (let i = 1; i < values.length; i++) {
       if (String(values[i][COL['Référence']]).trim() === String(data.ref).trim()) {
-        sheet.getRange(i + 1, COL['Montant devis (€)'] + 1).setValue(montant);
+        // Réduction fidélité/parrainage en attente sur cette réservation ?
+        // Appliquée automatiquement une seule fois, sur ce devis.
+        const reduction = Number(values[i][COL['Réduction spéciale à appliquer (%)']]) || 0;
+        const montantFinal = reduction > 0 ? Math.round(montant * (1 - reduction / 100) * 100) / 100 : montant;
+
+        sheet.getRange(i + 1, COL['Montant devis (€)'] + 1).setValue(montantFinal);
         sheet.getRange(i + 1, COL['Devis envoyé le'] + 1).setValue(new Date());
         sheet.getRange(i + 1, COL['Relance acompte envoyée'] + 1).setValue('');
-        if (montant > 0) {
-          sendQuoteEmail_(values[i], montant);
+        if (reduction > 0) sheet.getRange(i + 1, COL['Réduction spéciale à appliquer (%)'] + 1).setValue('');
+        if (montantFinal > 0) {
+          sendQuoteEmail_(values[i], montantFinal, reduction);
         }
-        return jsonOut_({ ok: true });
+        return jsonOut_({ ok: true, montant: montantFinal, reductionAppliquee: reduction });
       }
     }
     return jsonOut_({ ok: false, error: 'not_found' });
@@ -472,6 +508,8 @@ function sendBookingConfirmedEmail_(row) {
     '',
     "Nous revenons vers vous prochainement avec le montant définitif du devis et les modalités de l'acompte.",
     '',
+    `Ajoutez l'évènement à votre calendrier : ${googleCalendarAddUrl_(row)}`,
+    '',
     'À très bientôt,',
     'Yena Event',
   ].join('\n');
@@ -479,7 +517,7 @@ function sendBookingConfirmedEmail_(row) {
 }
 
 /** Email envoyé au client quand Yena renseigne le montant du devis, avec le montant de l'acompte et le lien direct pour le régler. */
-function sendQuoteEmail_(row, montant) {
+function sendQuoteEmail_(row, montant, reductionAppliquee) {
   const email = row[COL['Email']];
   if (!email) return;
   const acompte = Math.round(montant * DEPOSIT_PERCENT * 100) / 100;
@@ -487,7 +525,7 @@ function sendQuoteEmail_(row, montant) {
   const body = [
     `Bonjour ${row[COL['Nom']]},`,
     '',
-    `Votre devis pour "${row[COL['Prestation']]}" (référence ${row[COL['Référence']]}) est prêt : ${montant} €.`,
+    `Votre devis pour "${row[COL['Prestation']]}" (référence ${row[COL['Référence']]}) est prêt : ${montant} €${reductionAppliquee ? ` (réduction de ${reductionAppliquee}% déjà appliquée)` : ''}.`,
     `Un acompte de ${percent}% (${acompte} €) est à régler pour valider définitivement votre réservation.`,
     '',
     `Réglez votre acompte en ligne en quelques clics : ${depositLink_(row[COL['Référence']], email)}`,
@@ -496,6 +534,62 @@ function sendQuoteEmail_(row, montant) {
     'Yena Event',
   ].join('\n');
   GmailApp.sendEmail(email, `Votre devis est prêt — ${row[COL['Référence']]}`, body, { name: 'Yena Event' });
+}
+
+/**
+ * Programme de parrainage : si la réservation confirmée `values[i]` indique
+ * avoir été parrainée par une référence existante, crédite une réduction au
+ * parrain ET au filleul sur leur prochain devis, et prévient les deux par
+ * email. Ne fait rien si le parrainage a déjà été traité ou si la référence
+ * du parrain est invalide/inexistante/identique à la sienne.
+ */
+function processReferral_(sheet, values, i) {
+  const filleulRow = values[i];
+  const parrainRef = String(filleulRow[COL['Parrainé par (référence)']] || '').trim();
+  const dejaTraite = String(filleulRow[COL['Parrainage traité']] || '').trim().toLowerCase() === 'oui';
+  if (!parrainRef || dejaTraite || parrainRef === String(filleulRow[COL['Référence']]).trim()) return;
+
+  const parrainIndex = values.findIndex((r, idx) => idx > 0 && String(r[COL['Référence']]).trim() === parrainRef);
+  if (parrainIndex === -1) return;
+  const parrainRow = values[parrainIndex];
+
+  sheet.getRange(i + 1, COL['Parrainage traité'] + 1).setValue('Oui');
+  const reductionFilleulActuelle = Number(filleulRow[COL['Réduction spéciale à appliquer (%)']]) || 0;
+  sheet.getRange(i + 1, COL['Réduction spéciale à appliquer (%)'] + 1)
+    .setValue(reductionFilleulActuelle + REFERRAL_DISCOUNT_PERCENT);
+
+  const reductionParrainActuelle = Number(parrainRow[COL['Réduction spéciale à appliquer (%)']]) || 0;
+  sheet.getRange(parrainIndex + 1, COL['Réduction spéciale à appliquer (%)'] + 1)
+    .setValue(reductionParrainActuelle + REFERRAL_DISCOUNT_PERCENT);
+
+  if (filleulRow[COL['Email']]) {
+    GmailApp.sendEmail(
+      filleulRow[COL['Email']],
+      `Votre parrainage est validé — ${filleulRow[COL['Référence']]}`,
+      [
+        `Bonjour ${filleulRow[COL['Nom']]},`,
+        '',
+        `Merci d'avoir utilisé un code de parrainage ! ${REFERRAL_DISCOUNT_PERCENT}% de réduction seront automatiquement appliqués sur votre devis.`,
+        '',
+        'Yena Event',
+      ].join('\n'),
+      { name: 'Yena Event' }
+    );
+  }
+  if (parrainRow[COL['Email']]) {
+    GmailApp.sendEmail(
+      parrainRow[COL['Email']],
+      `Merci pour votre parrainage — ${parrainRow[COL['Référence']]}`,
+      [
+        `Bonjour ${parrainRow[COL['Nom']]},`,
+        '',
+        `Bonne nouvelle : quelqu'un a utilisé votre code de parrainage (référence ${parrainRow[COL['Référence']]}) ! En remerciement, ${REFERRAL_DISCOUNT_PERCENT}% de réduction seront automatiquement appliqués sur votre prochain devis.`,
+        '',
+        'Yena Event',
+      ].join('\n'),
+      { name: 'Yena Event' }
+    );
+  }
 }
 
 /**
@@ -809,6 +903,8 @@ function handleBooking_(data) {
     budget: clampStr_(data.budget, 100),
     message: clampStr_(data.message, 3000),
     phone: clampStr_(data.phone, 40),
+    typeClient: ['Particulier', 'Entreprise'].includes(data.typeClient) ? data.typeClient : '',
+    referralRef: clampStr_(data.referralRef, 60),
   });
 
   return withLock_(() => {
@@ -825,6 +921,10 @@ function handleBooking_(data) {
         driveFolderUrl: existing[COL['Lien dossier Drive']],
       });
     }
+
+    // Client récurrent ? (même email déjà présent sur une réservation antérieure)
+    const dejaClient = sheet.getDataRange().getValues().slice(1)
+      .some(r => r[COL['Email']] && String(r[COL['Email']]).trim().toLowerCase() === data.email.trim().toLowerCase());
 
     // --- Google Calendar : création de l'évènement (journée entière) ---
     const eventDate = new Date(data.eventDate + 'T00:00:00');
@@ -865,11 +965,30 @@ function handleBooking_(data) {
       data.message || '', 'En attente', clientFolder.getId(), driveFolderUrl,
       calEvent.getId(), calendarEventUrl, '', 'Nouvelle demande', '',
     ]);
+    const rowIndex = sheet.getLastRow();
+    if (data.typeClient) sheet.getRange(rowIndex, COL['Type client'] + 1).setValue(data.typeClient);
+    if (data.referralRef) sheet.getRange(rowIndex, COL['Parrainé par (référence)'] + 1).setValue(data.referralRef);
+    if (dejaClient) sheet.getRange(rowIndex, COL['Réduction spéciale à appliquer (%)'] + 1).setValue(LOYALTY_DISCOUNT_PERCENT);
 
     sendBookingEmails_(data, calendarEventUrl, driveFolderUrl);
+    if (dejaClient) sendLoyaltyEmail_(data);
 
     return jsonOut_({ ok: true, ref: data.ref, calendarEventUrl, driveFolderUrl });
   });
+}
+
+/** Email de fidélité envoyé dès qu'un email déjà utilisé sur une réservation précédente refait une demande. */
+function sendLoyaltyEmail_(data) {
+  const body = [
+    `Bonjour ${data.fullName},`,
+    '',
+    'Merci de nous refaire confiance pour ce nouvel évènement !',
+    `En remerciement, ${LOYALTY_DISCOUNT_PERCENT}% de réduction seront automatiquement appliqués sur le devis de cette réservation (référence ${data.ref}).`,
+    '',
+    'À très bientôt,',
+    'Yena Event',
+  ].join('\n');
+  GmailApp.sendEmail(data.email, `Merci de votre fidélité — ${data.ref}`, body, { name: 'Yena Event' });
 }
 
 /** Email de confirmation au client + notification à Yena pour chaque nouvelle demande. */
@@ -910,6 +1029,68 @@ function sendBookingEmails_(data, calendarEventUrl, driveFolderUrl) {
     `Tableau de suivi : https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`,
   ].join('\n');
   GmailApp.sendEmail(OWNER_EMAIL, `Nouvelle demande — ${data.service} (${data.ref})`, ownerBody, { name: 'Site Yena Event' });
+}
+
+/* ====== Suivi client (statut, historique, calendrier) ====== */
+
+/** Lien "Ajouter à mon calendrier" (Google Calendar) pré-rempli pour une réservation. */
+function googleCalendarAddUrl_(row) {
+  const raw = row[COL['Date évènement']];
+  if (!raw) return '';
+  const start = raw instanceof Date ? raw : new Date(raw + 'T00:00:00');
+  const end = new Date(start.getTime() + 86400000);
+  const fmt = (d) => Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyyMMdd');
+  const text = encodeURIComponent(`${row[COL['Prestation']]} — Yena Event`);
+  const details = encodeURIComponent(`Référence : ${row[COL['Référence']]}`);
+  const location = encodeURIComponent(row[COL['Lieu']] || '');
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${fmt(start)}/${fmt(end)}&details=${details}&location=${location}`;
+}
+
+/**
+ * Statut complet d'une réservation pour la page de suivi client (référence +
+ * email), avec le lien calendrier et l'historique des réservations passées
+ * associées au même email (client récurrent).
+ */
+function handleBookingStatus_(data) {
+  const ref = String(data.ref || '').trim();
+  const email = String(data.email || '').trim();
+  if (!ref || !email) return jsonOut_({ ok: false, error: 'missing_field' });
+  if (!rateLimitOk_('bookingStatus', 30, 60)) return jsonOut_({ ok: false, error: 'rate_limited' });
+
+  const values = getSheet_().getDataRange().getValues();
+  const row = values.slice(1).find(r => String(r[COL['Référence']]).trim() === ref);
+  if (!row || String(row[COL['Email']]).trim().toLowerCase() !== email.toLowerCase()) {
+    return jsonOut_({ ok: false, error: 'not_found' });
+  }
+
+  const montantDevis = Number(row[COL['Montant devis (€)']]) || 0;
+
+  const history = values.slice(1)
+    .filter(r => r[COL['Référence']] && String(r[COL['Email']]).trim().toLowerCase() === email.toLowerCase())
+    .map(r => ({
+      ref: r[COL['Référence']],
+      service: r[COL['Prestation']],
+      eventDate: formatDateForJson_(r[COL['Date évènement']]),
+      statutReservation: r[COL['Statut réservation']] || 'Nouvelle demande',
+    }))
+    .sort((a, b) => String(b.eventDate).localeCompare(String(a.eventDate)));
+
+  return jsonOut_({
+    ok: true,
+    ref: row[COL['Référence']],
+    service: row[COL['Prestation']],
+    fullName: row[COL['Nom']],
+    eventDate: formatDateForJson_(row[COL['Date évènement']]),
+    location: row[COL['Lieu']],
+    statutReservation: row[COL['Statut réservation']] || 'Nouvelle demande',
+    statutPhotos: row[COL['Statut photos']] || 'En attente',
+    montantDevis,
+    montantAcompte: montantDevis ? Math.round(montantDevis * DEPOSIT_PERCENT * 100) / 100 : 0,
+    acomptePaye: String(row[COL['Acompte payé']]).trim().toLowerCase() === 'oui',
+    depositPercent: DEPOSIT_PERCENT,
+    calendarAddUrl: googleCalendarAddUrl_(row),
+    history,
+  });
 }
 
 /* ====== Acompte en ligne (Stripe) ====== */
@@ -1239,6 +1420,61 @@ function envoyerRelancesAcompte_() {
   }
 }
 
+/**
+ * Enquête de satisfaction privée envoyée le lendemain de l'évènement — distincte
+ * de la demande d'avis Google publique (envoyée plus tard, voir
+ * `envoyerDemandesAvis`). Permet à Yena de détecter un souci directement avec
+ * le client avant qu'il ne se transforme en avis négatif public.
+ */
+function envoyerEnquetesSatisfaction_() {
+  const sheet = getSheet_();
+  const values = sheet.getDataRange().getValues();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const rawDate = row[COL['Date évènement']];
+    const dejaEnvoyee = row[COL['Enquête envoyée']];
+    const email = row[COL['Email']];
+    if (!rawDate || dejaEnvoyee === 'Oui' || !email) continue;
+
+    const eventDate = rawDate instanceof Date ? rawDate : new Date(rawDate + 'T00:00:00');
+    eventDate.setHours(0, 0, 0, 0);
+    const joursEcoules = Math.floor((today - eventDate) / 86400000);
+    if (joursEcoules < DELAI_ENQUETE_JOURS) continue;
+
+    const ref = row[COL['Référence']];
+    const noteLinks = [1, 2, 3, 4, 5].map(n => {
+      const subject = encodeURIComponent(`Avis privé — ${ref} — Note ${n}/5`);
+      const bodyMailto = encodeURIComponent(`Note : ${n}/5\nCommentaire : (à compléter avant l'envoi)`);
+      return `<a href="mailto:${OWNER_EMAIL}?subject=${subject}&body=${bodyMailto}" style="display:inline-block;margin:4px;padding:8px 14px;background:#52311b;color:#fff;text-decoration:none;border-radius:20px;font-family:sans-serif;">${n}</a>`;
+    }).join('');
+
+    const textBody = [
+      `Bonjour ${row[COL['Nom']]},`,
+      '',
+      `Votre évènement (${row[COL['Prestation']]}) est passé — nous espérons que tout s'est bien déroulé !`,
+      "Une remarque à nous faire en privé ? Répondez simplement à cet email, nous serions ravis de vous lire.",
+      '',
+      'Merci,',
+      'Yena Event',
+    ].join('\n');
+    const htmlBody = [
+      `<p>Bonjour ${row[COL['Nom']]},</p>`,
+      `<p>Votre évènement (${row[COL['Prestation']]}) est passé — nous espérons que tout s'est bien déroulé !</p>`,
+      '<p>Une remarque, un souci à nous signaler en privé ? Notez votre expérience (1 = déçu, 5 = ravi) :</p>',
+      `<p>${noteLinks}</p>`,
+      '<p>Merci,<br>Yena Event</p>',
+    ].join('');
+
+    GmailApp.sendEmail(email, 'Votre avis (privé) sur votre évènement — Yena Event', textBody, {
+      name: 'Yena Event', htmlBody, replyTo: OWNER_EMAIL,
+    });
+    sheet.getRange(i + 1, COL['Enquête envoyée'] + 1).setValue('Oui');
+  }
+}
+
 function handleUnsubscribe_(e) {
   const email = String(e.parameter.email || '').trim().toLowerCase();
   if (email) {
@@ -1336,6 +1572,7 @@ function envoyerNewsletter() {
 
 /** Regroupe les tâches quotidiennes automatiques (avis + rappels + newsletters en attente). */
 function tachesQuotidiennes() {
+  envoyerEnquetesSatisfaction_();
   envoyerDemandesAvis();
   envoyerRappelsAvantEvenement();
   envoyerRelancesAcompte_();

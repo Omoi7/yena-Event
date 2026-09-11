@@ -4,7 +4,7 @@ Site vitrine interactif pour l'agence évènementielle Yena Event (mariages, ann
 
 ## Fonctionnalités
 
-- Navigation par onglets responsive (mobile / tablette / desktop), pas de long défilement : chaque section (Accueil, Prestations, Catalogue, Galerie, Avis, Réservation, Acompte, Mes photos, FAQ, Contact...) s'affiche à la demande, liens partageables (`#section`)
+- Navigation par onglets responsive (mobile / tablette / desktop), pas de long défilement : chaque section (Accueil, Prestations, Catalogue, Galerie, Avis, Réservation, Mon suivi, Acompte, Mes photos, FAQ, Contact...) s'affiche à la demande, liens partageables (`#section`)
 - Animations au scroll et compteurs statistiques animés
 - Grille de prestations avec sélection rapide
 - **Carrousel des vrais avis Google** de Yena Event (via SerpApi, gratuit), repli automatique sur des avis d'exemple tant que ce n'est pas configuré
@@ -14,11 +14,15 @@ Site vitrine interactif pour l'agence évènementielle Yena Event (mariages, ann
 - **Ajout au calendrier en un clic** (Google Calendar + fichier .ics) dès la validation de la demande
 - **Paiement de l'acompte en ligne** (Stripe Checkout) une fois la réservation confirmée et le devis chiffré par Yena
 - **Espace « Mes photos »** : chaque client retrouve le statut de son dossier et les photos de son évènement (référence + email) dans le dossier Google Drive dédié créé automatiquement
-- **Emails automatiques** : confirmation au client et notification à Yena à chaque réservation, message de contact envoyé directement par email, **email dès la confirmation de la réservation**, **email avec le montant de l'acompte et le lien de paiement dès que le devis est saisi** (+ **relance automatique** si l'acompte reste impayé après 5 jours), **rappel au client 7 jours avant son évènement confirmé**, et **demande d'avis Google automatique** 2 jours après
+- **Onglet « Mon suivi »** : statut de la réservation, devis/acompte, lien calendrier et **historique des réservations passées** (client récurrent) à partir de la référence + email
+- **Emails automatiques** : confirmation au client et notification à Yena à chaque réservation, message de contact envoyé directement par email, **email dès la confirmation de la réservation**, **email avec le montant de l'acompte et le lien de paiement dès que le devis est saisi** (+ **relance automatique** si l'acompte reste impayé après 5 jours), **rappel au client 7 jours avant son évènement confirmé**, **enquête de satisfaction privée** le lendemain de l'évènement, et **demande d'avis Google automatique** 2 jours après
+- **Programme de parrainage** : un client indique la référence de la personne qui l'a recommandé, les deux reçoivent 10% de réduction sur leur prochain devis dès la réservation confirmée
+- **Fidélité automatique** : 10% de réduction créditée dès qu'un email déjà utilisé sur une réservation précédente refait une demande
+- **Profil client** (Particulier / Entreprise) optionnel sur le formulaire, visible dans l'admin
 - **Newsletter** : Yena écrit son texte (depuis le Sheet ou la page admin), elle part automatiquement à tous les anciens clients et aux inscrits du site (lien de désinscription inclus)
 - **Catalogue de formules** (sans prix affichés, devis personnalisé systématique — contenu exemple à personnaliser)
 - **Galerie publique gérable depuis l'admin**, distincte des dossiers photos privés des clients
-- **Page d'administration** (`admin.html`, protégée par mot de passe, elle aussi en onglets) : réservations avec suivi de statut et gestion de l'acompte, activation de l'accès aux photos, gestion de la galerie, envoi de newsletter, export CSV — sans jamais ouvrir le Google Sheet
+- **Page d'administration** (`admin.html`, protégée par mot de passe, elle aussi en onglets) : bandeau de statistiques (demandes du mois, évènements confirmés à venir, acomptes encaissés, taux de conversion devis→payé), réservations avec suivi de statut, badges client récurrent/réduction en attente et gestion de l'acompte, activation de l'accès aux photos, gestion de la galerie, envoi de newsletter, export CSV — sans jamais ouvrir le Google Sheet
 - Bouton WhatsApp flottant, formulaire de contact (envoyé par email à Yena) et inscription newsletter
 - Protection anti-spam (piège invisible + limite de fréquence) et anti-force-brute sur l'admin
 - Barre de progression de lecture, copie de référence en un clic, focus clavier accessible
@@ -62,12 +66,15 @@ action manuelle** :
 |---|---|
 | Un client valide une réservation | Évènement créé dans l'agenda Google de Yena · Dossier Drive client créé dans « Événements » (même convention `AAAA-MM-JJ_Prénom_Prestation` que Yena utilise déjà) · Ligne ajoutée au Google Sheet de suivi · **Email de confirmation envoyé au client** · **Email de notification envoyé à Yena** |
 | Un visiteur envoie le formulaire de contact | **Email envoyé directement à Yena**, avec réponse possible en direct au client (reply-to) |
+| Le lendemain de la date d'un évènement | **Email d'enquête de satisfaction privée** (note 1-5 en un clic, distincte de l'avis Google public) — envoyé une seule fois par réservation |
 | 2 jours après la date d'un évènement | **Email automatique envoyé au client** pour lui demander de laisser un avis Google (lien vers [la fiche Yena Event](https://maps.app.goo.gl/5UB9AKGLjTxDrgbWA)) — envoyé une seule fois par réservation |
 | Yena écrit une newsletter et passe son Statut à `Envoyer maintenant` | **Envoyée automatiquement** à tous les anciens clients et abonnés du site, le lendemain matin au plus tard |
 | 7 jours avant un évènement dont le « Statut réservation » est `Confirmé` | **Email de rappel automatique envoyé au client**, une seule fois |
 | Yena passe le « Statut réservation » d'une réservation à `Confirmé` | **Email de confirmation envoyé au client** |
 | Yena renseigne le montant du devis (« Montant devis (€) ») dans l'admin | **Email envoyé au client** avec le montant de l'acompte et un lien direct vers l'onglet « Acompte » du site, référence et email déjà pré-remplis |
 | 5 jours après l'envoi du devis, si l'acompte n'a toujours pas été réglé | **Email de relance automatique envoyé au client**, une seule fois par devis (le compteur repart à zéro si Yena change le montant du devis) |
+| Un client confirmé indique avoir été parrainé par une référence existante | **10% de réduction crédités au parrain ET au filleul** sur leur prochain devis, email envoyé aux deux |
+| Un email déjà utilisé sur une réservation précédente refait une demande | **10% de réduction fidélité créditée** automatiquement sur le devis de cette nouvelle réservation, email envoyé au client |
 | Un visiteur choisit une date sur le formulaire | Le site interroge le Sheet en direct et signale si la date est déjà prise par une réservation `Confirmé` |
 | Yena dépose les photos et passe une ligne à `Prêt` (colonne « Statut photos » du Sheet) | Le client peut voir/ouvrir son dossier photo depuis l'espace « Mes photos » du site |
 
