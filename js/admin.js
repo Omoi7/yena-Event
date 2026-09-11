@@ -52,6 +52,7 @@ const loginError = document.getElementById('loginError');
 let adminKey = null;
 let latestBookings = [];
 let statutsReservation = ['Nouvelle demande', 'Devis envoyé', 'Confirmé', 'Terminé'];
+let depositPercent = 0.30;
 
 /* ====== Onglets du tableau de bord ====== */
 const ADMIN_TABS = ['reservations', 'newsletter', 'galerie'];
@@ -130,7 +131,7 @@ function formatDateFr_(iso) {
 
 function renderBookings_() {
   if (!latestBookings.length) {
-    bookingsBody.innerHTML = '<tr><td colspan="8" class="admin-empty">Aucune réservation pour le moment.</td></tr>';
+    bookingsBody.innerHTML = '<tr><td colspan="9" class="admin-empty">Aucune réservation pour le moment.</td></tr>';
     return;
   }
   bookingsBody.innerHTML = latestBookings.map(b => {
@@ -141,9 +142,19 @@ function renderBookings_() {
       : '—';
     const actionCell = ready
       ? '<span class="status-pill ready">✓ Prêt</span>'
-      : `<button type="button" class="btn-tiny" data-ref="${ref}">Marquer prêtes</button>`;
+      : `<button type="button" class="btn-tiny mark-photos-btn" data-ref="${ref}">Marquer prêtes</button>`;
     const statutActuel = b.statutReservation || 'Nouvelle demande';
     const options = statutsReservation.map(s => `<option value="${escapeHtml_(s)}" ${s === statutActuel ? 'selected' : ''}>${escapeHtml_(s)}</option>`).join('');
+
+    const montant = Number(b.montantDevis) || 0;
+    const acompte = montant > 0 ? Math.round(montant * depositPercent * 100) / 100 : 0;
+    let depositCell = `<input type="number" min="0" step="1" class="quote-input" data-ref="${ref}" placeholder="Montant devis €" value="${montant || ''}">`;
+    if (montant > 0) {
+      depositCell += b.acomptePaye
+        ? `<br><span class="status-pill ready">✓ Acompte payé (${acompte} €)</span>`
+        : `<br><span class="status-pill pending">Acompte dû : ${acompte} €</span><br><button type="button" class="btn-tiny mark-paid-btn" data-ref="${ref}">Marquer payé</button>`;
+    }
+
     return `
       <tr>
         <td>${ref}</td>
@@ -154,23 +165,25 @@ function renderBookings_() {
         <td><select class="status-select" data-ref="${ref}">${options}</select></td>
         <td><span class="status-pill ${ready ? 'ready' : 'pending'}">${escapeHtml_(b.statutPhotos)}</span><br>${driveLink}</td>
         <td>${actionCell}</td>
+        <td>${depositCell}</td>
       </tr>
     `;
   }).join('');
 }
 
 async function loadBookings_() {
-  bookingsBody.innerHTML = '<tr><td colspan="8" class="admin-empty">Chargement…</td></tr>';
+  bookingsBody.innerHTML = '<tr><td colspan="9" class="admin-empty">Chargement…</td></tr>';
   const result = await callApi_({ type: 'adminList', adminKey });
 
   if (!result.ok) {
     if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
-    bookingsBody.innerHTML = '<tr><td colspan="8" class="admin-empty">Erreur de chargement. Réessayez.</td></tr>';
+    bookingsBody.innerHTML = '<tr><td colspan="9" class="admin-empty">Erreur de chargement. Réessayez.</td></tr>';
     return;
   }
 
   latestBookings = result.bookings || [];
   if (result.statutsReservation && result.statutsReservation.length) statutsReservation = result.statutsReservation;
+  if (result.depositPercent) depositPercent = result.depositPercent;
   document.getElementById('statBookings').textContent = latestBookings.length;
   document.getElementById('statPending').textContent = latestBookings.filter(b => b.statutPhotos !== 'Prêt').length;
   document.getElementById('statSubscribers').textContent = result.abonnesCount || 0;
@@ -181,7 +194,23 @@ async function loadBookings_() {
 refreshBtn.addEventListener('click', loadBookings_);
 
 bookingsBody.addEventListener('click', async (e) => {
-  const btn = e.target.closest('button[data-ref]');
+  const paidBtn = e.target.closest('.mark-paid-btn');
+  if (paidBtn) {
+    const ref = paidBtn.dataset.ref;
+    if (!confirm(`Confirmez-vous avoir bien reçu l'acompte pour ${ref} (vérifié dans le tableau de bord Stripe) ?`)) return;
+    paidBtn.disabled = true;
+    paidBtn.textContent = '…';
+    const result = await callApi_({ type: 'adminMarkDepositPaid', adminKey, ref });
+    if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
+    if (!result.ok) { showToast('Erreur, réessayez.'); paidBtn.disabled = false; paidBtn.textContent = 'Marquer payé'; return; }
+    showToast(`Acompte marqué payé pour ${ref}.`);
+    const booking = latestBookings.find(b => b.ref === ref);
+    if (booking) booking.acomptePaye = true;
+    renderBookings_();
+    return;
+  }
+
+  const btn = e.target.closest('.mark-photos-btn');
   if (!btn) return;
   const ref = btn.dataset.ref;
   btn.disabled = true;
@@ -203,6 +232,25 @@ bookingsBody.addEventListener('click', async (e) => {
 });
 
 bookingsBody.addEventListener('change', async (e) => {
+  const quoteInput = e.target.closest('.quote-input');
+  if (quoteInput) {
+    const ref = quoteInput.dataset.ref;
+    const montant = Number(quoteInput.value);
+    if (!Number.isFinite(montant) || montant < 0) { showToast('Montant invalide.'); return; }
+    quoteInput.disabled = true;
+
+    const result = await callApi_({ type: 'adminSetQuoteAmount', adminKey, ref, montant });
+    quoteInput.disabled = false;
+    if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
+    if (!result.ok) { showToast('Erreur, réessayez.'); return; }
+
+    const booking = latestBookings.find(b => b.ref === ref);
+    if (booking) booking.montantDevis = montant;
+    showToast(`Montant du devis enregistré pour ${ref}.`);
+    renderBookings_();
+    return;
+  }
+
   const select = e.target.closest('select[data-ref]');
   if (!select) return;
   const ref = select.dataset.ref;

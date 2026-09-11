@@ -70,6 +70,11 @@
   font-family:var(--font-body); font-size:.8rem; background:var(--white); color:var(--text); cursor:pointer;
 }
 .status-select:focus{outline:2px solid var(--gold);}
+.quote-input{
+  width:120px; padding:6px 10px; border-radius:8px; border:1px solid rgba(82,49,27,.25);
+  font-family:var(--font-body); font-size:.8rem; background:var(--white); color:var(--text); margin-bottom:6px;
+}
+.quote-input:focus{outline:2px solid var(--gold);}
 
 /* ====== Table ====== */
 .admin-table-wrap{overflow-x:auto;}

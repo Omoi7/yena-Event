@@ -46,7 +46,7 @@ const revealObserver = new IntersectionObserver((entries) => {
 document.querySelectorAll('.reveal').forEach(el => revealObserver.observe(el));
 
 /* ====== Navigation par onglets (sections) ====== */
-const TAB_IDS = ['accueil', 'apropos', 'prestations', 'process', 'catalogue', 'galerie', 'avis', 'reservation', 'photos', 'faq', 'contact'];
+const TAB_IDS = ['accueil', 'apropos', 'prestations', 'process', 'catalogue', 'galerie', 'avis', 'reservation', 'acompte', 'photos', 'faq', 'contact'];
 const tabBar = document.getElementById('tabBar');
 
 function activateTab_(id, opts = {}) {
@@ -761,3 +761,96 @@ photosForm.addEventListener('submit', async (e) => {
     photosSubmitBtn.textContent = originalLabel;
   }
 });
+
+/* ====== Acompte (paiement en ligne) ====== */
+const depositForm = document.getElementById('depositForm');
+const depositResult = document.getElementById('depositResult');
+const depositSubmitBtn = document.getElementById('depositSubmitBtn');
+
+function showDepositResult_(html, state) {
+  depositResult.className = 'photos-result state-' + state;
+  depositResult.innerHTML = html;
+  depositResult.hidden = false;
+}
+
+async function checkDepositStatus_(ref, email) {
+  const originalLabel = depositSubmitBtn.textContent;
+  depositSubmitBtn.disabled = true;
+  depositSubmitBtn.innerHTML = '<span class="spinner"></span>Recherche…';
+
+  const data = await sendToBackend_({ type: 'depositStatus', ref, email, hp: document.getElementById('hpDeposit').value });
+
+  depositSubmitBtn.disabled = false;
+  depositSubmitBtn.textContent = originalLabel;
+
+  if (!data.ok) {
+    showDepositResult_(`<h4>Aucune réservation trouvée</h4><p>Vérifiez votre référence et l'email utilisé lors de la réservation, ou contactez-nous directement.</p>`, 'error');
+    return;
+  }
+  if (data.statutReservation !== 'Confirmé') {
+    showDepositResult_(`<h4>Réservation pas encore confirmée</h4><p>L'acompte sera disponible une fois votre devis validé et votre réservation confirmée par notre équipe.</p>`, 'pending');
+    return;
+  }
+  if (!data.stripeConfigured) {
+    showDepositResult_(`<h4>Paiement en ligne bientôt disponible</h4><p>Cette fonctionnalité est en cours de mise en place. Contactez-nous pour régler votre acompte autrement en attendant.</p>`, 'pending');
+    return;
+  }
+  if (!data.montantDevis) {
+    showDepositResult_(`<h4>Devis en cours</h4><p>Le montant de votre devis n'a pas encore été renseigné par notre équipe. Revenez bientôt.</p>`, 'pending');
+    return;
+  }
+  if (data.acomptePaye) {
+    showDepositResult_(`<h4>✓ Acompte réglé</h4><p>Merci, votre acompte de ${escapeHtml_(data.montantAcompte)} € a bien été reçu.</p>`, 'ready');
+    return;
+  }
+
+  const percent = Math.round((data.depositPercent || 0.3) * 100);
+  showDepositResult_(
+    `<h4>Acompte à régler</h4><p>Montant de votre acompte (${percent}% du devis de ${escapeHtml_(data.montantDevis)} €) : <strong>${escapeHtml_(data.montantAcompte)} €</strong></p>` +
+    `<button type="button" class="btn btn-primary" id="payDepositBtn">Payer ${escapeHtml_(data.montantAcompte)} € maintenant</button>`,
+    'pending'
+  );
+  document.getElementById('payDepositBtn').addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Redirection vers le paiement…';
+    const result = await sendToBackend_({ type: 'createDepositCheckout', ref, email });
+    if (result.ok && result.url) {
+      window.location.href = result.url;
+    } else {
+      btn.disabled = false;
+      btn.textContent = original;
+      showToast("Impossible de démarrer le paiement, réessayez ou contactez-nous.");
+    }
+  });
+}
+
+depositForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const ref = document.getElementById('depositRef').value.trim();
+  const email = document.getElementById('depositEmail').value.trim();
+  if (!ref || !email) return;
+  checkDepositStatus_(ref, email);
+});
+
+// Retour depuis Stripe Checkout (succès ou annulation), via ?ref=...&session_id=...
+(function handleStripeReturn_() {
+  const params = new URLSearchParams(location.search);
+  const ref = params.get('ref');
+  const sessionId = params.get('session_id');
+  if (!ref) return;
+
+  document.getElementById('depositRef').value = ref;
+  // Nettoie l'URL (les paramètres de retour Stripe n'ont plus lieu d'être
+  // une fois lus) sans recharger la page ni perdre l'onglet actif.
+  history.replaceState(null, '', location.pathname + location.hash);
+
+  if (sessionId) {
+    sendToBackend_({ type: 'confirmDepositPayment', ref, sessionId }).then(result => {
+      showToast(result.ok
+        ? 'Paiement confirmé, merci !'
+        : "Paiement reçu par Stripe, confirmation en cours — vérifiez dans quelques instants ou contactez-nous.");
+    });
+  }
+})();

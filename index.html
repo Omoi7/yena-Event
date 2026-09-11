@@ -38,6 +38,7 @@
   <button type="button" class="tab-btn" data-tab="galerie" role="tab" aria-selected="false">Galerie</button>
   <button type="button" class="tab-btn" data-tab="avis" role="tab" aria-selected="false">Avis</button>
   <button type="button" class="tab-btn" data-tab="reservation" role="tab" aria-selected="false">Réservation</button>
+  <button type="button" class="tab-btn" data-tab="acompte" role="tab" aria-selected="false">Acompte</button>
   <button type="button" class="tab-btn" data-tab="photos" role="tab" aria-selected="false">Mes photos</button>
   <button type="button" class="tab-btn" data-tab="faq" role="tab" aria-selected="false">FAQ</button>
   <button type="button" class="tab-btn" data-tab="contact" role="tab" aria-selected="false">Contact</button>
@@ -341,6 +342,35 @@
             <button type="button" class="btn btn-primary" id="newRequestBtn">Faire une nouvelle demande</button>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ACOMPTE -->
+  <section id="acompte" class="section tab-panel" hidden>
+    <div class="container">
+      <div class="section-head reveal">
+        <p class="eyebrow">Paiement en ligne</p>
+        <h2>Réglez votre acompte</h2>
+        <p class="section-sub">Une fois votre devis validé et votre réservation confirmée, indiquez votre référence et votre email pour régler votre acompte par carte, en toute sécurité.</p>
+      </div>
+      <div class="photos-card reveal">
+        <div class="hp-field" aria-hidden="true">
+          <label for="hpDeposit">Ne pas remplir ce champ</label>
+          <input type="text" id="hpDeposit" tabindex="-1" autocomplete="off">
+        </div>
+        <form id="depositForm" class="photos-form" novalidate>
+          <div class="field">
+            <label for="depositRef">Référence de réservation *</label>
+            <input type="text" id="depositRef" placeholder="Ex : YE-M8X2K1" required>
+          </div>
+          <div class="field">
+            <label for="depositEmail">Email utilisé pour la réservation *</label>
+            <input type="email" id="depositEmail" placeholder="vous@exemple.com" autocomplete="email" required>
+          </div>
+          <button type="submit" class="btn btn-primary" id="depositSubmitBtn">Vérifier mon acompte</button>
+        </form>
+        <div class="photos-result" id="depositResult" hidden></div>
       </div>
     </div>
   </section>

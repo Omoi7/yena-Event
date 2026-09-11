@@ -112,6 +112,35 @@ const GOOGLE_REVIEW_LINK = 'https://maps.app.goo.gl/5UB9AKGLjTxDrgbWA';
 // Si les deux sont configurées, SerpApi est utilisée en priorité.
 const SERPAPI_BUSINESS_QUERY = 'Yena Event, Île-de-France, France';
 
+// Paiement de l'acompte en ligne (Stripe Checkout) : une seule propriété du
+// script à ajouter, en plus de celles déjà listées ci-dessus :
+//   - STRIPE_SECRET_KEY : clé secrète Stripe (commence par sk_test_... en
+//     mode test, sk_live_... en mode réel — JAMAIS la clé publique pk_...,
+//     et jamais écrite ici ni commitée : uniquement dans les propriétés du
+//     script, comme ADMIN_KEY).
+// Tant qu'elle n'est pas configurée, l'onglet "Acompte" du site indique
+// simplement que le paiement en ligne n'est pas encore disponible.
+//
+// Fonctionnement : Yena saisit le montant total du devis pour une
+// réservation confirmée depuis l'admin (colonne "Montant devis (€)"), le
+// site calcule l'acompte automatiquement (voir DEPOSIT_PERCENT ci-dessous)
+// et le client peut le régler par carte via une page de paiement Stripe
+// sécurisée (le site ne manipule jamais de numéro de carte). La
+// confirmation se fait automatiquement au retour du paiement ; un bouton
+// "Marquer l'acompte payé" existe aussi dans l'admin en secours, au cas où
+// le client fermerait son onglet juste après avoir payé.
+//
+// Compte Stripe à créer sur https://dashboard.stripe.com/register (gratuit,
+// aucun frais tant qu'aucun paiement n'est encaissé ; commissions Stripe
+// standard ensuite, ~1,5 % + 0,25 € par paiement par carte française). La
+// clé secrète se trouve sur https://dashboard.stripe.com/test/apikeys en
+// mode test, puis https://dashboard.stripe.com/apikeys une fois prêt à
+// passer en conditions réelles.
+const STRIPE_API_BASE = 'https://api.stripe.com/v1';
+
+// Pourcentage du montant du devis demandé en acompte. Modifiable librement.
+const DEPOSIT_PERCENT = 0.30;
+
 // Nombre de jours après la date de l'évènement avant l'envoi de la demande d'avis.
 const DELAI_AVIS_JOURS = 2;
 
@@ -134,6 +163,7 @@ const HEADERS = [
   'Lieu', 'Budget', 'Nom', 'Email', 'Téléphone', 'Message', 'Statut photos',
   'ID dossier Drive', 'Lien dossier Drive', 'ID évènement Calendar', 'Lien évènement Calendar',
   'Avis demandé', 'Statut réservation', 'Rappel envoyé',
+  'Montant devis (€)', 'Acompte payé', 'Stripe Session ID',
 ];
 
 const COL = HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
@@ -300,6 +330,11 @@ function doPost(e) {
     if (data.type === 'adminSendNewsletter') return handleAdminSendNewsletter_(data);
     if (data.type === 'adminAddGalleryImage') return handleAdminAddGalleryImage_(data);
     if (data.type === 'adminDeleteGalleryImage') return handleAdminDeleteGalleryImage_(data);
+    if (data.type === 'adminSetQuoteAmount') return handleAdminSetQuoteAmount_(data);
+    if (data.type === 'adminMarkDepositPaid') return handleAdminMarkDepositPaid_(data);
+    if (data.type === 'depositStatus') return handleDepositStatus_(data);
+    if (data.type === 'createDepositCheckout') return handleCreateDepositCheckout_(data);
+    if (data.type === 'confirmDepositPayment') return handleConfirmDepositPayment_(data);
     return handleBooking_(data);
   } catch (err) {
     return jsonOut_({ ok: false, error: 'server_error', message: String(err) });
@@ -357,11 +392,13 @@ function handleAdminList_(data) {
       statutPhotos: r[COL['Statut photos']] || 'En attente',
       statutReservation: r[COL['Statut réservation']] || 'Nouvelle demande',
       driveFolderUrl: r[COL['Lien dossier Drive']],
+      montantDevis: r[COL['Montant devis (€)']] || '',
+      acomptePaye: String(r[COL['Acompte payé']]).trim().toLowerCase() === 'oui',
     }))
     .reverse();
 
   const abonnesCount = Math.max(getAbonnesSheet_().getLastRow() - 1, 0);
-  return jsonOut_({ ok: true, bookings, abonnesCount, statutsReservation: STATUTS_RESERVATION });
+  return jsonOut_({ ok: true, bookings, abonnesCount, statutsReservation: STATUTS_RESERVATION, depositPercent: DEPOSIT_PERCENT });
 }
 
 /** Met à jour le statut de suivi (Nouvelle demande / Devis envoyé / Confirmé / Terminé) d'une réservation. */
@@ -375,6 +412,47 @@ function handleAdminUpdateBookingStatus_(data) {
     for (let i = 1; i < values.length; i++) {
       if (String(values[i][COL['Référence']]).trim() === String(data.ref).trim()) {
         sheet.getRange(i + 1, COL['Statut réservation'] + 1).setValue(data.statut);
+        return jsonOut_({ ok: true });
+      }
+    }
+    return jsonOut_({ ok: false, error: 'not_found' });
+  });
+}
+
+/** Renseigne le montant total du devis d'une réservation (base de calcul de l'acompte). */
+function handleAdminSetQuoteAmount_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+  const montant = Number(data.montant);
+  if (!Number.isFinite(montant) || montant < 0) return jsonOut_({ ok: false, error: 'invalid_amount' });
+
+  return withLock_(() => {
+    const sheet = getSheet_();
+    const values = sheet.getDataRange().getValues();
+    for (let i = 1; i < values.length; i++) {
+      if (String(values[i][COL['Référence']]).trim() === String(data.ref).trim()) {
+        sheet.getRange(i + 1, COL['Montant devis (€)'] + 1).setValue(montant);
+        return jsonOut_({ ok: true });
+      }
+    }
+    return jsonOut_({ ok: false, error: 'not_found' });
+  });
+}
+
+/**
+ * Marque manuellement l'acompte d'une réservation comme payé, en secours du
+ * flux automatique (ex. client ayant fermé son onglet juste après avoir payé
+ * sur Stripe, avant le retour sur le site). À utiliser après avoir vérifié
+ * le paiement dans le tableau de bord Stripe.
+ */
+function handleAdminMarkDepositPaid_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  return withLock_(() => {
+    const sheet = getSheet_();
+    const values = sheet.getDataRange().getValues();
+    for (let i = 1; i < values.length; i++) {
+      if (String(values[i][COL['Référence']]).trim() === String(data.ref).trim()) {
+        sheet.getRange(i + 1, COL['Acompte payé'] + 1).setValue('Oui');
         return jsonOut_({ ok: true });
       }
     }
@@ -772,6 +850,158 @@ function sendBookingEmails_(data, calendarEventUrl, driveFolderUrl) {
     `Tableau de suivi : https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`,
   ].join('\n');
   GmailApp.sendEmail(OWNER_EMAIL, `Nouvelle demande — ${data.service} (${data.ref})`, ownerBody, { name: 'Site Yena Event' });
+}
+
+/* ====== Acompte en ligne (Stripe) ====== */
+
+/** Convertit un objet en corps de requête "application/x-www-form-urlencoded" (format attendu par l'API Stripe). */
+function toFormUrlEncoded_(obj, prefix) {
+  const parts = [];
+  Object.keys(obj).forEach(key => {
+    const value = obj[key];
+    const fullKey = prefix ? `${prefix}[${key}]` : key;
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      parts.push(toFormUrlEncoded_(value, fullKey));
+    } else {
+      parts.push(`${encodeURIComponent(fullKey)}=${encodeURIComponent(value)}`);
+    }
+  });
+  return parts.join('&');
+}
+
+/** Appelle l'API Stripe (clé secrète en Bearer token). `method` : 'get' ou 'post'. */
+function stripeApiCall_(path, method, payload) {
+  const secretKey = PropertiesService.getScriptProperties().getProperty('STRIPE_SECRET_KEY');
+  if (!secretKey) return { ok: false, error: 'stripe_not_configured' };
+
+  const options = {
+    method,
+    headers: { Authorization: 'Bearer ' + secretKey },
+    muteHttpExceptions: true,
+  };
+  if (method === 'post' && payload) {
+    options.contentType = 'application/x-www-form-urlencoded';
+    options.payload = toFormUrlEncoded_(payload);
+  }
+  const res = UrlFetchApp.fetch(STRIPE_API_BASE + path, options);
+  const json = JSON.parse(res.getContentText());
+  if (json.error) return { ok: false, error: 'stripe_error', message: json.error.message };
+  return { ok: true, data: json };
+}
+
+/** Trouve une réservation par référence + email, insensible à la casse pour l'email. */
+function findBookingByRefAndEmail_(ref, email) {
+  const sheet = getSheet_();
+  const row = findRowByRef_(sheet, ref);
+  if (!row || String(row[COL['Email']]).trim().toLowerCase() !== String(email).trim().toLowerCase()) return null;
+  return { sheet, row };
+}
+
+/** Statut de l'acompte pour une réservation (montant dû, payé ou non), consulté depuis l'onglet "Acompte" du site. */
+function handleDepositStatus_(data) {
+  const ref = String(data.ref || '').trim();
+  const email = String(data.email || '').trim();
+  if (!ref || !email) return jsonOut_({ ok: false, error: 'missing_field' });
+  if (!rateLimitOk_('depositStatus', 30, 60)) return jsonOut_({ ok: false, error: 'rate_limited' });
+
+  const found = findBookingByRefAndEmail_(ref, email);
+  if (!found) return jsonOut_({ ok: false, error: 'not_found' });
+
+  const row = found.row;
+  const statutReservation = row[COL['Statut réservation']] || 'Nouvelle demande';
+  const montantDevis = Number(row[COL['Montant devis (€)']]) || 0;
+  const acomptePaye = String(row[COL['Acompte payé']]).trim().toLowerCase() === 'oui';
+  const stripeConfigured = !!PropertiesService.getScriptProperties().getProperty('STRIPE_SECRET_KEY');
+
+  return jsonOut_({
+    ok: true,
+    statutReservation,
+    montantDevis,
+    montantAcompte: montantDevis > 0 ? Math.round(montantDevis * DEPOSIT_PERCENT * 100) / 100 : 0,
+    acomptePaye,
+    depositPercent: DEPOSIT_PERCENT,
+    stripeConfigured,
+  });
+}
+
+/** Crée une session de paiement Stripe Checkout pour l'acompte d'une réservation et renvoie son URL. */
+function handleCreateDepositCheckout_(data) {
+  const ref = String(data.ref || '').trim();
+  const email = String(data.email || '').trim();
+  if (!ref || !email) return jsonOut_({ ok: false, error: 'missing_field' });
+  if (!rateLimitOk_('createDepositCheckout', 10, 60)) return jsonOut_({ ok: false, error: 'rate_limited' });
+
+  return withLock_(() => {
+    const found = findBookingByRefAndEmail_(ref, email);
+    if (!found) return jsonOut_({ ok: false, error: 'not_found' });
+    const { sheet, row } = found;
+
+    if (String(row[COL['Acompte payé']]).trim().toLowerCase() === 'oui') {
+      return jsonOut_({ ok: false, error: 'already_paid' });
+    }
+    const montantDevis = Number(row[COL['Montant devis (€)']]) || 0;
+    if (montantDevis <= 0) return jsonOut_({ ok: false, error: 'no_quote' });
+
+    const montantAcompte = Math.round(montantDevis * DEPOSIT_PERCENT * 100) / 100;
+    const amountCents = Math.round(montantAcompte * 100);
+    const rowIndex = sheet.getDataRange().getValues().findIndex(r => String(r[COL['Référence']]).trim() === ref) + 1;
+
+    const result = stripeApiCall_('/checkout/sessions', 'post', {
+      mode: 'payment',
+      'payment_method_types[0]': 'card',
+      'line_items[0][price_data][currency]': 'eur',
+      'line_items[0][price_data][unit_amount]': amountCents,
+      'line_items[0][price_data][product_data][name]': `Acompte réservation ${ref} — ${row[COL['Prestation']]}`,
+      'line_items[0][quantity]': 1,
+      customer_email: row[COL['Email']],
+      success_url: `${SITE_URL}?session_id={CHECKOUT_SESSION_ID}&ref=${encodeURIComponent(ref)}#acompte`,
+      cancel_url: `${SITE_URL}?ref=${encodeURIComponent(ref)}#acompte`,
+      'metadata[ref]': ref,
+    });
+    if (!result.ok) return jsonOut_(result);
+
+    sheet.getRange(rowIndex, COL['Stripe Session ID'] + 1).setValue(result.data.id);
+    return jsonOut_({ ok: true, url: result.data.url });
+  });
+}
+
+/**
+ * Confirme le paiement d'un acompte au retour du client depuis Stripe
+ * Checkout : on va relire l'état réel de la session directement auprès de
+ * Stripe (avec la clé secrète) plutôt que de faire confiance à l'URL de
+ * retour seule, pour éviter qu'elle ne soit falsifiée.
+ */
+function handleConfirmDepositPayment_(data) {
+  const ref = String(data.ref || '').trim();
+  const sessionId = String(data.sessionId || '').trim();
+  if (!ref || !sessionId) return jsonOut_({ ok: false, error: 'missing_field' });
+
+  return withLock_(() => {
+    const sheet = getSheet_();
+    const values = sheet.getDataRange().getValues();
+    const rowIndex = values.findIndex(r => String(r[COL['Référence']]).trim() === ref);
+    if (rowIndex < 1) return jsonOut_({ ok: false, error: 'not_found' });
+    const row = values[rowIndex];
+
+    // Le Session ID doit correspondre à celui enregistré pour cette
+    // réservation lors de la création du paiement (empêche de valider un
+    // acompte avec l'ID de session d'une autre réservation).
+    if (String(row[COL['Stripe Session ID']]).trim() !== sessionId) {
+      return jsonOut_({ ok: false, error: 'session_mismatch' });
+    }
+    if (String(row[COL['Acompte payé']]).trim().toLowerCase() === 'oui') {
+      return jsonOut_({ ok: true, alreadyConfirmed: true });
+    }
+
+    const result = stripeApiCall_(`/checkout/sessions/${encodeURIComponent(sessionId)}`, 'get');
+    if (!result.ok) return jsonOut_(result);
+    if (result.data.payment_status !== 'paid' || result.data.metadata.ref !== ref) {
+      return jsonOut_({ ok: false, error: 'not_paid' });
+    }
+
+    sheet.getRange(rowIndex + 1, COL['Acompte payé'] + 1).setValue('Oui');
+    return jsonOut_({ ok: true });
+  });
 }
 
 /** Consultation "Mes photos" (?ref=...&email=...) ou désinscription newsletter (?action=unsubscribe&email=...). */

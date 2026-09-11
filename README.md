@@ -4,22 +4,23 @@ Site vitrine interactif pour l'agence évènementielle Yena Event (mariages, ann
 
 ## Fonctionnalités
 
-- Page unique responsive (mobile / tablette / desktop)
-- Navigation fluide avec menu mobile
+- Navigation par onglets responsive (mobile / tablette / desktop), pas de long défilement : chaque section (Accueil, Prestations, Catalogue, Galerie, Avis, Réservation, Acompte, Mes photos, FAQ, Contact...) s'affiche à la demande, liens partageables (`#section`)
 - Animations au scroll et compteurs statistiques animés
 - Grille de prestations avec sélection rapide
-- Carrousel de témoignages clients
+- **Carrousel des vrais avis Google** de Yena Event (via SerpApi, gratuit), repli automatique sur des avis d'exemple tant que ce n'est pas configuré
 - FAQ en accordéon
 - **Formulaire de réservation en 4 étapes** permettant à un client de choisir une prestation, renseigner les détails de son évènement, ses coordonnées, puis **valider sa prestation en ligne** avec génération d'une référence de demande
 - **Vérification de disponibilité en direct** : la date choisie est comparée aux évènements déjà confirmés, avec message immédiat si elle est prise
 - **Ajout au calendrier en un clic** (Google Calendar + fichier .ics) dès la validation de la demande
+- **Paiement de l'acompte en ligne** (Stripe Checkout) une fois la réservation confirmée et le devis chiffré par Yena
 - **Espace « Mes photos »** : chaque client retrouve le statut de son dossier et les photos de son évènement (référence + email) dans le dossier Google Drive dédié créé automatiquement
 - **Emails automatiques** : confirmation au client et notification à Yena à chaque réservation, message de contact envoyé directement par email, **rappel au client 7 jours avant son évènement confirmé**, et **demande d'avis Google automatique** 2 jours après
 - **Newsletter** : Yena écrit son texte (depuis le Sheet ou la page admin), elle part automatiquement à tous les anciens clients et aux inscrits du site (lien de désinscription inclus)
 - **Catalogue de formules** (sans prix affichés, devis personnalisé systématique — contenu exemple à personnaliser)
 - **Galerie publique gérable depuis l'admin**, distincte des dossiers photos privés des clients
-- **Page d'administration** (`admin.html`, protégée par mot de passe) : réservations avec suivi de statut, activation de l'accès aux photos, gestion de la galerie, envoi de newsletter, export CSV — sans jamais ouvrir le Google Sheet
+- **Page d'administration** (`admin.html`, protégée par mot de passe, elle aussi en onglets) : réservations avec suivi de statut et gestion de l'acompte, activation de l'accès aux photos, gestion de la galerie, envoi de newsletter, export CSV — sans jamais ouvrir le Google Sheet
 - Bouton WhatsApp flottant, formulaire de contact (envoyé par email à Yena) et inscription newsletter
+- Protection anti-spam (piège invisible + limite de fréquence) et anti-force-brute sur l'admin
 - Barre de progression de lecture, copie de référence en un clic, focus clavier accessible
 - Palette de marque : marron `#52311b` / beige `#e6d6bc`
 
@@ -146,6 +147,42 @@ Pour un envoi immédiat sans attendre le lendemain : ouvrir l'éditeur Apps
 Script, sélectionner la fonction `envoyerNewsletter` dans le menu déroulant,
 cliquer ▶️ Exécuter.
 
+### Paiement de l'acompte en ligne (Stripe)
+
+Une fois une réservation **confirmée**, Yena saisit le montant total du
+devis depuis l'onglet « Réservations » de l'admin (colonne « Devis &
+acompte »). Le site calcule alors automatiquement l'acompte (30 % du devis
+par défaut — modifiable via la constante `DEPOSIT_PERCENT` en tête de
+`Code.gs`) et le client peut le régler par carte depuis l'onglet
+« Acompte » du site, via une page de paiement Stripe sécurisée (le site ne
+manipule jamais de numéro de carte). La confirmation se fait automatiquement
+au retour du paiement ; un bouton **« Marquer payé »** existe aussi dans
+l'admin en secours (à utiliser après vérification dans le tableau de bord
+Stripe), au cas où le client fermerait son onglet juste après avoir payé.
+
+**Mise en place (comme `ADMIN_KEY`, une seule propriété du script) :**
+
+1. Créer un compte sur **https://dashboard.stripe.com/register** (gratuit,
+   aucun frais tant qu'aucun paiement n'est encaissé ; commission standard
+   Stripe ensuite, environ 1,5 % + 0,25 € par paiement par carte française).
+2. Récupérer la clé secrète de **test** sur
+   **https://dashboard.stripe.com/test/apikeys** (commence par `sk_test_...`
+   — jamais la clé publique `pk_...`, qui ne sert à rien ici).
+3. Dans l'éditeur Apps Script : ⚙️ **Paramètres du projet** > **Propriétés
+   du script** > ajouter `STRIPE_SECRET_KEY` avec cette valeur.
+4. Tester avec une carte de test Stripe (ex. `4242 4242 4242 4242`, toute
+   date future, tout CVC) sur une réservation confirmée avec un devis saisi.
+5. **Pour passer en paiements réels** (une fois les tests concluants) :
+   remplacer la valeur de `STRIPE_SECRET_KEY` par la clé secrète de
+   **production**, trouvable sur **https://dashboard.stripe.com/apikeys**
+   après avoir activé le compte (informations légales et bancaires de Yena
+   Event à renseigner sur le tableau de bord Stripe). Aucune autre
+   modification nécessaire.
+
+Tant que `STRIPE_SECRET_KEY` n'est pas configurée, l'onglet « Acompte » du
+site indique simplement que le paiement en ligne n'est pas encore
+disponible — aucune erreur, aucun risque de casse.
+
 ### Pourquoi une étape reste manuelle (et pourquoi ce n'est pas contournable)
 
 Un script qui envoie des emails ou modifie un agenda **sans supervision**
@@ -203,12 +240,5 @@ automatiques, contact form silencieux côté Yena).
 
 ## Pistes envisagées mais non implémentées
 
-- **Paiement d'acompte en ligne (Stripe)** : volontairement mis de côté —
-  implique de vraies transactions, un compte Stripe à configurer, et des
-  décisions (montant, politique de remboursement) qui méritent une
-  discussion dédiée avant tout développement.
 - **Multi-langue (FR/EN) et SEO local avancé** : pistes identifiées, non
   prioritaires pour l'instant.
-- **Vrais avis clients affichés sur le site** : les témoignages actuels
-  restent des exemples ; à remplacer une fois que de vrais avis Google
-  commenceront à arriver via l'email de demande d'avis automatique.
