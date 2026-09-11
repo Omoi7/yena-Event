@@ -77,29 +77,40 @@ const OWNER_EMAIL = 'yena.event7@gmail.com';
 const SITE_URL = 'https://omoi7.github.io/yena-Event/';
 const GOOGLE_REVIEW_LINK = 'https://maps.app.goo.gl/5UB9AKGLjTxDrgbWA';
 
-// Avis Google réels affichés sur le site (section "Avis") via l'API Google
-// Places : nécessite deux propriétés du script (PropertiesService), en plus
-// de ADMIN_KEY :
+// Avis Google réels affichés sur le site (section "Avis") : deux façons de
+// les récupérer, au choix (la première est gratuite). Tant qu'aucune des
+// deux n'est configurée, le site utilise des avis d'exemple à la place
+// (aucune erreur, dégradation silencieuse).
+//
+// OPTION 1 — SerpApi (RECOMMANDÉE, gratuite, sans carte bancaire) :
+//   - Une seule propriété du script à ajouter : SERPAPI_KEY.
+//   - Étapes : créer un compte gratuit sur https://serpapi.com/users/sign_up
+//     (email suffit, pas de carte bancaire — plan gratuit : 250 recherches/
+//     mois). Une fois connecté, copier la clé API sur
+//     https://serpapi.com/manage-api-key.
+//   - Dans l'éditeur Apps Script : ⚙️ Paramètres du projet > Propriétés du
+//     script > "Ajouter une propriété de script" > Propriété : SERPAPI_KEY,
+//     Valeur : la clé copiée. Enregistrer.
+//   - Rien d'autre à faire : le script retrouve lui-même la fiche "Yena
+//     Event" (voir SERPAPI_BUSINESS_QUERY ci-dessous) et met les résultats
+//     en cache (24h pour les avis, 30 jours pour l'identifiant de la fiche)
+//     pour rester très largement sous le quota gratuit mensuel.
+//
+// OPTION 2 — API Google Places (payante depuis 2025, pas de vrai palier
+// gratuit) : nécessite un compte de facturation Google Cloud avec carte
+// bancaire enregistrée. À réserver au cas où SerpApi ne conviendrait pas.
 //   - GOOGLE_PLACES_API_KEY : clé API Google Cloud (API "Places API" activée)
 //   - GOOGLE_PLACE_ID       : identifiant de la fiche Google Yena Event
-// Tant qu'elles ne sont pas configurées, le site utilise des avis d'exemple
-// à la place (aucune erreur, dégradation silencieuse). Étapes de mise en
-// place :
-//   1. Sur https://console.cloud.google.com, créez un projet (ou réutilisez-
-//      en un existant), puis "API et services" > "Bibliothèque" > cherchez
-//      "Places API" > Activer.
-//   2. "API et services" > "Identifiants" > "Créer des identifiants" > "Clé
-//      API". Restreignez-la ensuite à "Places API" uniquement (onglet
-//      "Restrictions relatives aux API").
-//   3. Trouvez l'identifiant de la fiche Google Yena Event avec l'outil
-//      officiel : https://developers.google.com/maps/documentation/places/web-service/place-id
-//      (chercher "Yena Event" sur la carte, copier le Place ID affiché).
-//   4. Dans l'éditeur Apps Script : ⚙️ Paramètres du projet > Propriétés du
-//      script > ajoutez GOOGLE_PLACES_API_KEY et GOOGLE_PLACE_ID avec les
-//      valeurs obtenues ci-dessus.
-// La Places API a un usage payant au-delà d'un crédit mensuel gratuit
-// généreux de Google Cloud ; les avis sont mis en cache 6h côté script pour
-// limiter le nombre d'appels facturables.
+//   Étapes : console.cloud.google.com > activer la facturation puis "API et
+//   services" > "Bibliothèque" > "Places API" > Activer ; "Identifiants" >
+//   "Créer des identifiants" > "Clé API" (la restreindre à "Places API") ;
+//   trouver le Place ID via
+//   https://developers.google.com/maps/documentation/places/web-service/place-id ;
+//   ajouter les deux propriétés dans les propriétés du script comme pour
+//   l'option 1.
+//
+// Si les deux sont configurées, SerpApi est utilisée en priorité.
+const SERPAPI_BUSINESS_QUERY = 'Yena Event, Île-de-France, France';
 
 // Nombre de jours après la date de l'évènement avant l'envoi de la demande d'avis.
 const DELAI_AVIS_JOURS = 2;
@@ -424,23 +435,104 @@ function handleGalleryPublic_() {
 }
 
 /**
- * Avis Google réels de la fiche Yena Event (API Places), mis en cache 6h
- * pour limiter les appels facturables. Renvoie { ok: false } si
- * GOOGLE_PLACES_API_KEY / GOOGLE_PLACE_ID ne sont pas configurées — le site
- * bascule alors silencieusement sur des avis d'exemple (voir en tête de
- * fichier pour la marche à suivre).
+ * Avis Google réels de la fiche Yena Event, via SerpApi (gratuit, priorité)
+ * ou l'API Google Places (payante, repli) selon ce qui est configuré dans
+ * les propriétés du script — voir le commentaire en tête de fichier. Le
+ * résultat final (même forme quelle que soit la source) est mis en cache
+ * 12h pour limiter le nombre d'appels. Renvoie { ok: false } si rien n'est
+ * configuré — le site bascule alors silencieusement sur des avis d'exemple.
  */
 function handleGoogleReviewsPublic_() {
-  const props = PropertiesService.getScriptProperties();
-  const apiKey = props.getProperty('GOOGLE_PLACES_API_KEY');
-  const placeId = props.getProperty('GOOGLE_PLACE_ID');
-  if (!apiKey || !placeId) return jsonOut_({ ok: false, error: 'not_configured' });
-
   const cache = CacheService.getScriptCache();
   const cacheKey = 'googleReviews';
   const cached = cache.get(cacheKey);
   if (cached) return jsonOut_(JSON.parse(cached));
 
+  const props = PropertiesService.getScriptProperties();
+  const serpApiKey = props.getProperty('SERPAPI_KEY');
+  const placesApiKey = props.getProperty('GOOGLE_PLACES_API_KEY');
+  const placeId = props.getProperty('GOOGLE_PLACE_ID');
+
+  let result;
+  if (serpApiKey) {
+    result = fetchReviewsFromSerpApi_(serpApiKey);
+  } else if (placesApiKey && placeId) {
+    result = fetchReviewsFromGooglePlaces_(placesApiKey, placeId);
+  } else {
+    return jsonOut_({ ok: false, error: 'not_configured' });
+  }
+
+  if (result.ok) cache.put(cacheKey, JSON.stringify(result), 43200); // 12h
+  return jsonOut_(result);
+}
+
+/**
+ * SerpApi (https://serpapi.com) : recherche la fiche Yena Event par son nom
+ * (pas besoin de connaître un Place ID à l'avance), puis récupère ses avis.
+ * L'identifiant de fiche trouvé est mis en cache 30 jours (il ne change
+ * quasiment jamais) pour économiser une recherche à chaque rafraîchissement
+ * des avis, et rester très largement sous le quota gratuit de 250/mois.
+ */
+function fetchReviewsFromSerpApi_(apiKey) {
+  try {
+    const cache = CacheService.getScriptCache();
+    let dataId = cache.get('serpapiDataId');
+
+    if (!dataId) {
+      const searchUrl = 'https://serpapi.com/search.json'
+        + '?engine=google_maps'
+        + `&q=${encodeURIComponent(SERPAPI_BUSINESS_QUERY)}`
+        + '&type=search'
+        + `&api_key=${encodeURIComponent(apiKey)}`;
+      const searchRes = UrlFetchApp.fetch(searchUrl, { muteHttpExceptions: true });
+      const searchJson = JSON.parse(searchRes.getContentText());
+      const firstResult = (searchJson.local_results && searchJson.local_results[0])
+        || searchJson.place_results;
+      if (!firstResult || !firstResult.data_id) {
+        return { ok: false, error: 'serpapi_place_not_found', message: searchJson.error || '' };
+      }
+      dataId = firstResult.data_id;
+      cache.put('serpapiDataId', dataId, 2592000); // 30 jours
+    }
+
+    const reviewsUrl = 'https://serpapi.com/search.json'
+      + '?engine=google_maps_reviews'
+      + `&data_id=${encodeURIComponent(dataId)}`
+      + '&hl=fr'
+      + `&api_key=${encodeURIComponent(apiKey)}`;
+    const reviewsRes = UrlFetchApp.fetch(reviewsUrl, { muteHttpExceptions: true });
+    const reviewsJson = JSON.parse(reviewsRes.getContentText());
+    if (reviewsJson.error) {
+      // L'identifiant en cache n'est peut-être plus valide : on l'oublie
+      // pour forcer une nouvelle recherche au prochain appel.
+      CacheService.getScriptCache().remove('serpapiDataId');
+      return { ok: false, error: 'serpapi_error', message: reviewsJson.error };
+    }
+
+    const placeInfo = reviewsJson.place_info || {};
+    const reviews = (reviewsJson.reviews || [])
+      .filter(r => r.snippet)
+      .map(r => ({
+        author: (r.user && r.user.name) || '',
+        rating: r.rating || 5,
+        text: r.snippet || '',
+        relativeTime: r.date || '',
+      }));
+
+    return {
+      ok: true,
+      rating: placeInfo.rating || null,
+      totalReviews: placeInfo.reviews || null,
+      reviewLink: GOOGLE_REVIEW_LINK,
+      reviews,
+    };
+  } catch (err) {
+    return { ok: false, error: 'server_error', message: String(err) };
+  }
+}
+
+/** API Google Places (payante) : voir le commentaire en tête de fichier. */
+function fetchReviewsFromGooglePlaces_(apiKey, placeId) {
   try {
     const url = 'https://maps.googleapis.com/maps/api/place/details/json'
       + `?place_id=${encodeURIComponent(placeId)}`
@@ -450,9 +542,9 @@ function handleGoogleReviewsPublic_() {
     const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
     const json = JSON.parse(res.getContentText());
     if (json.status !== 'OK' || !json.result) {
-      return jsonOut_({ ok: false, error: 'places_error', message: json.status });
+      return { ok: false, error: 'places_error', message: json.status };
     }
-    const result = {
+    return {
       ok: true,
       rating: json.result.rating || null,
       totalReviews: json.result.user_ratings_total || null,
@@ -464,10 +556,8 @@ function handleGoogleReviewsPublic_() {
         relativeTime: r.relative_time_description || '',
       })),
     };
-    cache.put(cacheKey, JSON.stringify(result), 21600); // 6h
-    return jsonOut_(result);
   } catch (err) {
-    return jsonOut_({ ok: false, error: 'server_error', message: String(err) });
+    return { ok: false, error: 'server_error', message: String(err) };
   }
 }
 
