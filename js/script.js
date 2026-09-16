@@ -157,6 +157,10 @@ SERVICES.forEach(s => {
 });
 
 let selectedService = null;
+// Produit choisi depuis le Catalogue (ex : "Photobooth — Formule 4h"), le cas
+// échéant — prend le pas sur la prestation choisie à l'étape 1 du formulaire,
+// qui devient alors facultative.
+let selectedCatalogueProduct = null;
 function selectService(id) {
   selectedService = id;
   serviceOptions.querySelectorAll('.option-card').forEach(el => {
@@ -242,7 +246,12 @@ function renderCatalogueItems_(items) {
   items.forEach(item => {
     const card = document.createElement('div');
     card.className = 'pricing-card reveal catalogue-card';
-    const optionsHtml = item.options.map(o => `<li>${escapeHtml_(o)}</li>`).join('');
+    const optionsHtml = item.options.map(o => `
+      <li>
+        <span>${escapeHtml_(o)}</span>
+        <button type="button" class="btn-tiny option-pick" data-product="${escapeHtml_(item.titre + ' — ' + o)}">Choisir</button>
+      </li>
+    `).join('');
     card.innerHTML = `
       ${item.url ? `<img src="${escapeHtml_(item.url)}" alt="${escapeHtml_(item.titre)}" class="catalogue-img" loading="lazy">` : ''}
       <h3>${escapeHtml_(item.titre)}</h3>
@@ -251,7 +260,7 @@ function renderCatalogueItems_(items) {
         <button type="button" class="btn btn-outline catalogue-toggle">Voir les options</button>
         <ul class="pricing-features catalogue-options" hidden>${optionsHtml}</ul>
       ` : ''}
-      <a href="#reservation" class="btn btn-primary">Demander un devis</a>
+      <button type="button" class="btn btn-primary catalogue-cta" data-product="${escapeHtml_(item.titre)}">Demander un devis</button>
     `;
     catalogueGrid.appendChild(card);
     revealObserver.observe(card);
@@ -265,6 +274,19 @@ function renderCatalogueItems_(items) {
       btn.textContent = expanded ? 'Voir les options' : 'Masquer les options';
     });
   });
+
+  catalogueGrid.querySelectorAll('.catalogue-cta, .option-pick').forEach(btn => {
+    btn.addEventListener('click', () => goToReservationWithProduct_(btn.dataset.product));
+  });
+}
+
+/** Envoie l'utilisateur directement à l'étape "Détails" du formulaire de réservation, avec le produit du Catalogue déjà choisi (équivalent d'avoir déjà répondu à l'étape "Prestation"). */
+function goToReservationWithProduct_(productLabel) {
+  selectedCatalogueProduct = productLabel;
+  activateTab_('reservation');
+  currentStep = 2;
+  renderStep();
+  updateCatalogueProductBadge_();
 }
 
 async function loadCatalogue_() {
@@ -438,10 +460,28 @@ function setError(id, msg) {
   if (el) el.textContent = msg || '';
 }
 
+function updateCatalogueProductBadge_() {
+  const badge = document.getElementById('catalogueProductBadge');
+  if (!badge) return;
+  if (selectedCatalogueProduct) {
+    badge.innerHTML = `🎯 Produit sélectionné : <strong>${escapeHtml_(selectedCatalogueProduct)}</strong> <button type="button" id="clearCatalogueProductBtn" class="badge-clear">Changer</button>`;
+    badge.hidden = false;
+    document.getElementById('clearCatalogueProductBtn').addEventListener('click', () => {
+      selectedCatalogueProduct = null;
+      updateCatalogueProductBadge_();
+      currentStep = 1;
+      renderStep();
+    });
+  } else {
+    badge.hidden = true;
+    badge.innerHTML = '';
+  }
+}
+
 function validateStep(step) {
   let valid = true;
   if (step === 1) {
-    if (!selectedService) { setError('service', 'Merci de sélectionner une prestation.'); valid = false; }
+    if (!selectedService && !selectedCatalogueProduct) { setError('service', 'Merci de sélectionner une prestation.'); valid = false; }
     else setError('service', '');
   }
   if (step === 2) {
@@ -507,7 +547,7 @@ function renderSummary() {
 
   document.getElementById('summaryBox').innerHTML = `
     <dl>
-      <dt>Prestation</dt><dd>${service ? service.icon + ' ' + escapeHtml_(service.title) : '—'}</dd>
+      <dt>Prestation</dt><dd>${selectedCatalogueProduct ? escapeHtml_(selectedCatalogueProduct) : (service ? service.icon + ' ' + escapeHtml_(service.title) : '—')}</dd>
       <dt>Date</dt><dd>${dateFmt}</dd>
       <dt>Invités</dt><dd>${escapeHtml_(guests) || '—'}</dd>
       <dt>Lieu</dt><dd>${escapeHtml_(location)}</dd>
@@ -584,10 +624,11 @@ bookingForm.addEventListener('submit', async (e) => {
   if (!validateStep(4)) return;
 
   const service = SERVICES.find(s => s.id === selectedService);
+  const serviceLabel = selectedCatalogueProduct || (service ? service.title : '');
   const ref = 'YE-' + Date.now().toString(36).toUpperCase();
   const booking = {
     ref,
-    service: service ? service.title : '',
+    service: serviceLabel,
     eventDate: document.getElementById('eventDate').value,
     guests: document.getElementById('guests').value,
     location: document.getElementById('location').value,
@@ -678,6 +719,8 @@ document.getElementById('downloadIcsBtn').addEventListener('click', () => {
 document.getElementById('newRequestBtn').addEventListener('click', () => {
   bookingForm.reset();
   selectedService = null;
+  selectedCatalogueProduct = null;
+  updateCatalogueProductBadge_();
   serviceOptions.querySelectorAll('.option-card').forEach(el => el.classList.remove('selected'));
   currentStep = 1;
   bookingForm.hidden = false;
