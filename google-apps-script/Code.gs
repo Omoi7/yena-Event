@@ -172,13 +172,6 @@ const LOYALTY_DISCOUNT_PERCENT = 10;
 // Statuts possibles pour le suivi d'une réservation (colonne "Statut réservation").
 const STATUTS_RESERVATION = ['Nouvelle demande', 'Devis envoyé', 'Confirmé', 'Terminé'];
 
-// Types de prestation proposés au client sur le formulaire de réservation.
-// Aujourd'hui, Yena Event ne fait que de la location de photobooth — cette
-// liste est volontairement une constante simple à étendre le jour où
-// d'autres types de prestations sont proposés (ajouter une valeur ici suffit,
-// le formulaire et l'admin s'adaptent automatiquement).
-const TYPES_PRESTATION = ['Photobooth'];
-
 // Dépôt d'exemples de contour (cadre/habillage des tirages photobooth) :
 // nombre d'images maximum par envoi, et poids maximum par image (en octets),
 // pour rester largement sous les quotas Drive/Apps Script.
@@ -209,7 +202,7 @@ const HEADERS = [
   'Devis envoyé le', 'Relance acompte envoyée',
   'Type client', 'Parrainé par (référence)', 'Parrainage traité',
   'Réduction spéciale à appliquer (%)', 'Enquête envoyée',
-  'Type de prestation', 'Contour souhaité (description)',
+  'Type de prestation', 'Option produit', 'Contour souhaité (description)',
 ];
 
 const COL = HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
@@ -472,6 +465,7 @@ function handleAdminList_(data) {
       nbReservations: countByEmail[String(r[COL['Email']] || '').trim().toLowerCase()] || 1,
       reductionSpeciale: Number(r[COL['Réduction spéciale à appliquer (%)']]) || 0,
       typePrestation: r[COL['Type de prestation']] || '',
+      produitOption: r[COL['Option produit']] || '',
       contourDescription: r[COL['Contour souhaité (description)']] || '',
     }))
     .reverse();
@@ -1057,7 +1051,10 @@ function handleBooking_(data) {
     phone: clampStr_(data.phone, 40),
     typeClient: ['Particulier', 'Entreprise'].includes(data.typeClient) ? data.typeClient : '',
     referralRef: clampStr_(data.referralRef, 60),
-    typePrestation: TYPES_PRESTATION.includes(data.typePrestation) ? data.typePrestation : TYPES_PRESTATION[0],
+    // Le produit vient désormais du Catalogue (géré depuis l'admin), plus
+    // d'une liste figée : on se contente de borner la longueur du texte reçu.
+    typePrestation: clampStr_(data.typePrestation, 200) || 'Photobooth',
+    produitOption: clampStr_(data.produitOption, 300),
   });
 
   return withLock_(() => {
@@ -1123,6 +1120,7 @@ function handleBooking_(data) {
     if (data.referralRef) sheet.getRange(rowIndex, COL['Parrainé par (référence)'] + 1).setValue(data.referralRef);
     if (dejaClient) sheet.getRange(rowIndex, COL['Réduction spéciale à appliquer (%)'] + 1).setValue(LOYALTY_DISCOUNT_PERCENT);
     sheet.getRange(rowIndex, COL['Type de prestation'] + 1).setValue(data.typePrestation);
+    if (data.produitOption) sheet.getRange(rowIndex, COL['Option produit'] + 1).setValue(data.produitOption);
 
     sendBookingEmails_(data, calendarEventUrl, driveFolderUrl);
     if (dejaClient) sendLoyaltyEmail_(data);
@@ -1244,6 +1242,7 @@ function handleBookingStatus_(data) {
     depositPercent: DEPOSIT_PERCENT,
     calendarAddUrl: googleCalendarAddUrl_(row),
     typePrestation: row[COL['Type de prestation']] || '',
+    produitOption: row[COL['Option produit']] || '',
     contourDescription: row[COL['Contour souhaité (description)']] || '',
     history,
   });

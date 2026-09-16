@@ -190,7 +190,6 @@
       </div>
 
       <div class="booking-card reveal">
-        <div class="catalogue-product-badge" id="catalogueProductBadge" hidden></div>
         <div class="booking-progress">
           <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
           <ol class="progress-steps" id="progressSteps">
@@ -233,10 +232,12 @@
                 <input type="text" id="location" name="location" placeholder="Ville, salle, ou à définir">
               </div>
               <div class="field">
-                <label for="typePrestation">Type de prestation</label>
-                <select id="typePrestation" name="typePrestation">
-                  <option value="Photobooth" selected>Photobooth</option>
-                </select>
+                <label for="produitSelect">Produit</label>
+                <select id="produitSelect" name="produit"></select>
+              </div>
+              <div class="field" id="produitOptionField" hidden>
+                <label for="produitOptionSelect">Option</label>
+                <select id="produitOptionSelect" name="produitOption"></select>
               </div>
               <div class="field">
                 <label for="budget">Budget estimé</label>

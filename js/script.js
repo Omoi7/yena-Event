@@ -157,10 +157,6 @@ SERVICES.forEach(s => {
 });
 
 let selectedService = null;
-// Produit choisi depuis le Catalogue (ex : "Photobooth — Formule 4h"), le cas
-// échéant — prend le pas sur la prestation choisie à l'étape 1 du formulaire,
-// qui devient alors facultative.
-let selectedCatalogueProduct = null;
 function selectService(id) {
   selectedService = id;
   serviceOptions.querySelectorAll('.option-card').forEach(el => {
@@ -239,8 +235,13 @@ const CATALOGUE_PLACEHOLDER = [
   },
 ];
 const catalogueGrid = document.getElementById('catalogueGrid');
+// Formules actuellement connues (réelles depuis l'admin, ou repli) — partagées
+// entre l'affichage du Catalogue et le sélecteur "Produit" du formulaire de
+// réservation, pour que les deux restent toujours synchronisés.
+let catalogueItems = [];
 
 function renderCatalogueItems_(items) {
+  catalogueItems = items;
   catalogueGrid.innerHTML = '';
   catalogueGrid.classList.toggle('single-item', items.length === 1);
   items.forEach(item => {
@@ -249,7 +250,7 @@ function renderCatalogueItems_(items) {
     const optionsHtml = item.options.map(o => `
       <li>
         <span>${escapeHtml_(o)}</span>
-        <button type="button" class="btn-tiny option-pick" data-product="${escapeHtml_(item.titre + ' — ' + o)}">Choisir</button>
+        <button type="button" class="btn-tiny option-pick" data-product="${escapeHtml_(item.titre)}" data-option="${escapeHtml_(o)}">Choisir</button>
       </li>
     `).join('');
     card.innerHTML = `
@@ -276,17 +277,10 @@ function renderCatalogueItems_(items) {
   });
 
   catalogueGrid.querySelectorAll('.catalogue-cta, .option-pick').forEach(btn => {
-    btn.addEventListener('click', () => goToReservationWithProduct_(btn.dataset.product));
+    btn.addEventListener('click', () => goToReservationWithProduct_(btn.dataset.product, btn.dataset.option || ''));
   });
-}
 
-/** Envoie l'utilisateur directement à l'étape "Détails" du formulaire de réservation, avec le produit du Catalogue déjà choisi (équivalent d'avoir déjà répondu à l'étape "Prestation"). */
-function goToReservationWithProduct_(productLabel) {
-  selectedCatalogueProduct = productLabel;
-  activateTab_('reservation');
-  currentStep = 2;
-  renderStep();
-  updateCatalogueProductBadge_();
+  populateProduitSelect_();
 }
 
 async function loadCatalogue_() {
@@ -303,6 +297,48 @@ async function loadCatalogue_() {
 }
 
 loadCatalogue_();
+
+/* ====== Produit / Option (formulaire de réservation, relié au Catalogue) ====== */
+const produitSelect = document.getElementById('produitSelect');
+const produitOptionField = document.getElementById('produitOptionField');
+const produitOptionSelect = document.getElementById('produitOptionSelect');
+
+/** (Re)construit la liste déroulante "Produit" à partir des formules du Catalogue, en conservant la sélection en cours si elle existe encore. */
+function populateProduitSelect_() {
+  const previous = produitSelect.value;
+  produitSelect.innerHTML = catalogueItems.map(item => `<option value="${escapeHtml_(item.titre)}">${escapeHtml_(item.titre)}</option>`).join('');
+  produitSelect.value = catalogueItems.some(i => i.titre === previous) ? previous : (catalogueItems[0] ? catalogueItems[0].titre : '');
+  updateProduitOptionSelect_();
+}
+
+/** (Re)construit la liste déroulante "Option" selon le produit actuellement sélectionné ; masquée si ce produit n'a pas d'options. */
+function updateProduitOptionSelect_(preselectOption) {
+  const item = catalogueItems.find(i => i.titre === produitSelect.value);
+  const options = item ? item.options : [];
+  if (!options.length) {
+    produitOptionField.hidden = true;
+    produitOptionSelect.innerHTML = '';
+    return;
+  }
+  produitOptionField.hidden = false;
+  produitOptionSelect.innerHTML =
+    '<option value="">Sélectionner une option…</option>' +
+    options.map(o => `<option value="${escapeHtml_(o)}">${escapeHtml_(o)}</option>`).join('');
+  if (preselectOption && options.includes(preselectOption)) produitOptionSelect.value = preselectOption;
+}
+
+produitSelect.addEventListener('change', () => updateProduitOptionSelect_());
+
+/** Envoie l'utilisateur directement à l'étape "Détails" du formulaire de réservation, avec le produit (et l'option, le cas échéant) du Catalogue déjà présélectionnés. */
+function goToReservationWithProduct_(produitTitre, optionLabel) {
+  activateTab_('reservation');
+  if (catalogueItems.some(i => i.titre === produitTitre)) {
+    produitSelect.value = produitTitre;
+    updateProduitOptionSelect_(optionLabel);
+  }
+  currentStep = 2;
+  renderStep();
+}
 
 /* ====== Testimonials ====== */
 // Avis d'exemple utilisés tant que les avis Google réels ne sont pas
@@ -460,28 +496,10 @@ function setError(id, msg) {
   if (el) el.textContent = msg || '';
 }
 
-function updateCatalogueProductBadge_() {
-  const badge = document.getElementById('catalogueProductBadge');
-  if (!badge) return;
-  if (selectedCatalogueProduct) {
-    badge.innerHTML = `🎯 Produit sélectionné : <strong>${escapeHtml_(selectedCatalogueProduct)}</strong> <button type="button" id="clearCatalogueProductBtn" class="badge-clear">Changer</button>`;
-    badge.hidden = false;
-    document.getElementById('clearCatalogueProductBtn').addEventListener('click', () => {
-      selectedCatalogueProduct = null;
-      updateCatalogueProductBadge_();
-      currentStep = 1;
-      renderStep();
-    });
-  } else {
-    badge.hidden = true;
-    badge.innerHTML = '';
-  }
-}
-
 function validateStep(step) {
   let valid = true;
   if (step === 1) {
-    if (!selectedService && !selectedCatalogueProduct) { setError('service', 'Merci de sélectionner une prestation.'); valid = false; }
+    if (!selectedService) { setError('service', 'Merci de sélectionner une prestation.'); valid = false; }
     else setError('service', '');
   }
   if (step === 2) {
@@ -543,11 +561,14 @@ function renderSummary() {
   const phone = document.getElementById('phone').value;
   const typeClient = document.getElementById('typeClient').value;
   const referralRef = document.getElementById('referralRef').value.trim();
+  const produit = produitSelect.value;
+  const produitOption = produitOptionField.hidden ? '' : produitOptionSelect.value;
   const dateFmt = date ? new Date(date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
 
   document.getElementById('summaryBox').innerHTML = `
     <dl>
-      <dt>Prestation</dt><dd>${selectedCatalogueProduct ? escapeHtml_(selectedCatalogueProduct) : (service ? service.icon + ' ' + escapeHtml_(service.title) : '—')}</dd>
+      <dt>Prestation</dt><dd>${service ? service.icon + ' ' + escapeHtml_(service.title) : '—'}</dd>
+      <dt>Produit</dt><dd>${escapeHtml_(produit)}${produitOption ? ' — ' + escapeHtml_(produitOption) : ''}</dd>
       <dt>Date</dt><dd>${dateFmt}</dd>
       <dt>Invités</dt><dd>${escapeHtml_(guests) || '—'}</dd>
       <dt>Lieu</dt><dd>${escapeHtml_(location)}</dd>
@@ -624,7 +645,10 @@ bookingForm.addEventListener('submit', async (e) => {
   if (!validateStep(4)) return;
 
   const service = SERVICES.find(s => s.id === selectedService);
-  const serviceLabel = selectedCatalogueProduct || (service ? service.title : '');
+  // "service" (occasion) doit toujours avoir une valeur côté backend : si elle
+  // n'a pas été choisie, on retombe sur le produit du Catalogue (toujours
+  // renseigné) plutôt que de bloquer l'envoi.
+  const serviceLabel = service ? service.title : produitSelect.value;
   const ref = 'YE-' + Date.now().toString(36).toUpperCase();
   const booking = {
     ref,
@@ -639,7 +663,8 @@ bookingForm.addEventListener('submit', async (e) => {
     message: document.getElementById('message').value,
     typeClient: document.getElementById('typeClient').value,
     referralRef: document.getElementById('referralRef').value.trim(),
-    typePrestation: document.getElementById('typePrestation').value,
+    typePrestation: produitSelect.value,
+    produitOption: produitOptionField.hidden ? '' : produitOptionSelect.value,
     createdAt: new Date().toISOString(),
     hp: document.getElementById('hpBooking').value,
   };
@@ -719,8 +744,7 @@ document.getElementById('downloadIcsBtn').addEventListener('click', () => {
 document.getElementById('newRequestBtn').addEventListener('click', () => {
   bookingForm.reset();
   selectedService = null;
-  selectedCatalogueProduct = null;
-  updateCatalogueProductBadge_();
+  populateProduitSelect_();
   serviceOptions.querySelectorAll('.option-card').forEach(el => el.classList.remove('selected'));
   currentStep = 1;
   bookingForm.hidden = false;
@@ -906,6 +930,9 @@ async function checkBookingStatus_(ref, email) {
   const parts = [];
   parts.push(`<p class="booking-status-badge">Statut : <strong>${escapeHtml_(data.statutReservation)}</strong></p>`);
   parts.push(`<h4>${escapeHtml_(data.service)}</h4>`);
+  if (data.typePrestation) {
+    parts.push(`<p>Produit : <strong>${escapeHtml_(data.typePrestation)}</strong>${data.produitOption ? ' — ' + escapeHtml_(data.produitOption) : ''}</p>`);
+  }
   parts.push(`<p>Évènement du ${escapeHtml_(data.eventDate)}${data.location ? ' — ' + escapeHtml_(data.location) : ''}</p>`);
 
   if (data.statutReservation === 'Confirmé' && data.calendarAddUrl) {

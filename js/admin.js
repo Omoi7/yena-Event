@@ -183,7 +183,7 @@ function renderBookings_() {
       <tr>
         <td>${ref}</td>
         <td>${escapeHtml_(b.fullName) || '—'}${clientBadges}</td>
-        <td>${escapeHtml_(b.service) || '—'}${b.typePrestation ? `<br><span style="color:var(--text-soft)">${escapeHtml_(b.typePrestation)}</span>` : ''}${contourNote}</td>
+        <td>${escapeHtml_(b.service) || '—'}${b.typePrestation ? `<br><span style="color:var(--text-soft)">${escapeHtml_(b.typePrestation)}${b.produitOption ? ' — ' + escapeHtml_(b.produitOption) : ''}</span>` : ''}${contourNote}</td>
         <td>${formatDateFr_(b.eventDate)}</td>
         <td>${escapeHtml_(b.email)}<br><span style="color:var(--text-soft)">${escapeHtml_(b.phone)}</span></td>
         <td><select class="status-select" data-ref="${ref}">${options}</select></td>
