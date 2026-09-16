@@ -217,6 +217,71 @@ async function loadGallery_() {
 
 loadGallery_();
 
+/* ====== Catalogue (formules) ====== */
+// Contenu de repli tant qu'aucune formule n'a été ajoutée depuis la page
+// admin — aujourd'hui, Yena Event ne propose que la location de photobooth.
+const CATALOGUE_PLACEHOLDER = [
+  {
+    titre: 'Photobooth',
+    description: "Notre photobooth moderne et élégant, avec designs personnalisés et impressions de haute qualité, livré, installé et désinstallé pour vous.",
+    url: '',
+    options: [
+      'Formule 2h — idéale pour un cocktail ou une petite réception',
+      'Formule 4h — pour couvrir l\'essentiel de votre soirée',
+      'Formule journée complète — pour ne rater aucun moment',
+      'Impressions illimitées avec cadre personnalisé à vos couleurs',
+      'Accessoires et fond de décor sur demande',
+    ],
+  },
+];
+const catalogueGrid = document.getElementById('catalogueGrid');
+
+function renderCatalogueItems_(items) {
+  catalogueGrid.innerHTML = '';
+  catalogueGrid.classList.toggle('single-item', items.length === 1);
+  items.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'pricing-card reveal catalogue-card';
+    const optionsHtml = item.options.map(o => `<li>${escapeHtml_(o)}</li>`).join('');
+    card.innerHTML = `
+      ${item.url ? `<img src="${escapeHtml_(item.url)}" alt="${escapeHtml_(item.titre)}" class="catalogue-img" loading="lazy">` : ''}
+      <h3>${escapeHtml_(item.titre)}</h3>
+      ${item.description ? `<p class="pricing-range catalogue-desc">${escapeHtml_(item.description)}</p>` : ''}
+      ${item.options.length ? `
+        <button type="button" class="btn btn-outline catalogue-toggle">Voir les options</button>
+        <ul class="pricing-features catalogue-options" hidden>${optionsHtml}</ul>
+      ` : ''}
+      <a href="#reservation" class="btn btn-primary">Demander un devis</a>
+    `;
+    catalogueGrid.appendChild(card);
+    revealObserver.observe(card);
+  });
+
+  catalogueGrid.querySelectorAll('.catalogue-toggle').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const options = btn.nextElementSibling;
+      const expanded = !options.hidden;
+      options.hidden = expanded;
+      btn.textContent = expanded ? 'Voir les options' : 'Masquer les options';
+    });
+  });
+}
+
+async function loadCatalogue_() {
+  const url = window.YENA_CONFIG && window.YENA_CONFIG.APPS_SCRIPT_URL;
+  if (!url) { renderCatalogueItems_(CATALOGUE_PLACEHOLDER); return; }
+  try {
+    const res = await fetch(`${url}?action=catalogue`);
+    const data = await res.json();
+    if (!data.ok || !data.items.length) { renderCatalogueItems_(CATALOGUE_PLACEHOLDER); return; }
+    renderCatalogueItems_(data.items);
+  } catch (err) {
+    renderCatalogueItems_(CATALOGUE_PLACEHOLDER);
+  }
+}
+
+loadCatalogue_();
+
 /* ====== Testimonials ====== */
 // Avis d'exemple utilisés tant que les avis Google réels ne sont pas
 // configurés côté backend (voir GOOGLE_PLACES_API_KEY / GOOGLE_PLACE_ID

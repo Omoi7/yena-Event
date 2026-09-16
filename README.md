@@ -21,9 +21,9 @@ Site vitrine interactif pour l'agence évènementielle Yena Event (mariages, ann
 - **Profil client** (Particulier / Entreprise) optionnel sur le formulaire, visible dans l'admin
 - **Type de prestation** sur le formulaire (aujourd'hui uniquement « Photobooth », liste extensible dans `Code.gs` le jour où Yena propose d'autres prestations). Pour une prestation Photobooth, le client peut ensuite déposer depuis l'onglet « Mon suivi » une **description écrite et/ou des images d'exemple du contour souhaité** pour ses tirages — rangées automatiquement dans le dossier Drive de sa réservation, avec notification par email à Yena
 - **Newsletter** : Yena écrit son texte (depuis le Sheet ou la page admin), elle part automatiquement à tous les anciens clients et aux inscrits du site (lien de désinscription inclus)
-- **Catalogue de formules** (sans prix affichés, devis personnalisé systématique — contenu exemple à personnaliser)
+- **Catalogue de formules géré depuis l'admin** (comme la galerie) : titre, description, image et liste d'options par formule, chaque option révélée au clic — sans prix affichés, devis personnalisé systématique. Une formule « Photobooth » s'affiche par défaut tant qu'aucune n'a été ajoutée depuis l'admin
 - **Galerie publique gérable depuis l'admin**, distincte des dossiers photos privés des clients
-- **Page d'administration** (`admin.html`, protégée par mot de passe, elle aussi en onglets) : bandeau de statistiques (demandes du mois, évènements confirmés à venir, acomptes encaissés, taux de conversion devis→payé), réservations avec suivi de statut, badges client récurrent/réduction en attente et gestion de l'acompte, activation de l'accès aux photos, gestion de la galerie, envoi de newsletter, export CSV — sans jamais ouvrir le Google Sheet
+- **Page d'administration** (`admin.html`, protégée par mot de passe, elle aussi en onglets) : bandeau de statistiques (demandes du mois, évènements confirmés à venir, acomptes encaissés, taux de conversion devis→payé), réservations avec suivi de statut, badges client récurrent/réduction en attente et gestion de l'acompte, activation de l'accès aux photos, gestion de la galerie et du catalogue, envoi de newsletter, export CSV — sans jamais ouvrir le Google Sheet
 - Bouton WhatsApp flottant, formulaire de contact (envoyé par email à Yena) et inscription newsletter
 - Protection anti-spam (piège invisible + limite de fréquence) et anti-force-brute sur l'admin
 - Barre de progression de lecture, copie de référence en un clic, focus clavier accessible
@@ -239,8 +239,6 @@ automatiques, contact form silencieux côté Yena).
 
 ## Contenus à personnaliser avant mise en ligne définitive
 
-- **Catalogue** (`index.html`, section `#catalogue`) : les 3 formules et
-  leurs inclusions sont des exemples, à adapter aux vraies prestations.
 - **Bouton WhatsApp** (`index.html`, tout en bas) : numéro placeholder
   `+33 6 00 00 00 00`, à remplacer par le vrai numéro WhatsApp.
 - Plus généralement, le téléphone et l'email affichés en plusieurs

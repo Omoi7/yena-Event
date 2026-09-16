@@ -123,3 +123,18 @@
   background:rgba(0,0,0,.55); color:#fff; border:none; cursor:pointer; font-size:.8rem; line-height:1;
 }
 .admin-gallery-item .gal-delete:hover{background:var(--error);}
+
+/* ====== Admin catalogue ====== */
+.admin-catalogue-list{display:flex; flex-direction:column; gap:14px; margin-top:24px;}
+.admin-catalogue-item{
+  display:flex; gap:16px; align-items:flex-start; background:var(--beige-light);
+  border-radius:var(--radius-sm); padding:16px; position:relative;
+}
+.admin-catalogue-item img{width:80px; height:80px; object-fit:cover; border-radius:8px; flex-shrink:0;}
+.admin-catalogue-item-body{flex:1; min-width:0;}
+.admin-catalogue-item-body h4{margin:0 0 4px; font-size:1rem;}
+.admin-catalogue-item-body p{margin:0 0 8px; font-size:.85rem; color:var(--text-soft);}
+.admin-catalogue-item-body ul{margin:0; padding-left:18px; font-size:.8rem; color:var(--text-soft);}
+.admin-catalogue-item-body li{margin-bottom:2px;}
+.admin-catalogue-item .gal-delete{position:static; flex-shrink:0; background:rgba(0,0,0,.15); color:var(--text);}
+.admin-catalogue-item .gal-delete:hover{background:var(--error); color:#fff;}

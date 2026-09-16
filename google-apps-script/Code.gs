@@ -220,6 +220,10 @@ const GALERIE_TAB = 'Galerie';
 const GALERIE_HEADERS = ['Titre', 'URL image', 'Ordre', 'Visible'];
 const GCOL = GALERIE_HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
 
+const CATALOGUE_TAB = 'Catalogue';
+const CATALOGUE_HEADERS = ['Titre', 'Description', 'URL image', 'Options (une par ligne)', 'Ordre', 'Visible'];
+const CATCOL = CATALOGUE_HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
+
 // Nom de l'onglet des réservations, utilisé pour le retrouver de façon fiable
 // (voir getSheet_ ci-dessous) même si Yena réordonne les onglets du classeur.
 const RESERVATIONS_TAB = 'Réservations (site web)';
@@ -278,6 +282,16 @@ function getGalerieSheet_() {
   if (!sheet) {
     sheet = ss.insertSheet(GALERIE_TAB);
     sheet.appendRow(GALERIE_HEADERS);
+  }
+  return sheet;
+}
+
+function getCatalogueSheet_() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName(CATALOGUE_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(CATALOGUE_TAB);
+    sheet.appendRow(CATALOGUE_HEADERS);
   }
   return sheet;
 }
@@ -370,6 +384,8 @@ function doPost(e) {
     if (data.type === 'adminSendNewsletter') return handleAdminSendNewsletter_(data);
     if (data.type === 'adminAddGalleryImage') return handleAdminAddGalleryImage_(data);
     if (data.type === 'adminDeleteGalleryImage') return handleAdminDeleteGalleryImage_(data);
+    if (data.type === 'adminAddCatalogueItem') return handleAdminAddCatalogueItem_(data);
+    if (data.type === 'adminDeleteCatalogueItem') return handleAdminDeleteCatalogueItem_(data);
     if (data.type === 'adminSetQuoteAmount') return handleAdminSetQuoteAmount_(data);
     if (data.type === 'adminMarkDepositPaid') return handleAdminMarkDepositPaid_(data);
     if (data.type === 'depositStatus') return handleDepositStatus_(data);
@@ -682,6 +698,56 @@ function handleGalleryPublic_() {
     .filter(img => img.visible && img.url)
     .sort((a, b) => a.ordre - b.ordre);
   return jsonOut_({ ok: true, images });
+}
+
+/* ====== Catalogue (formules), géré depuis l'admin ====== */
+
+/** Ajoute une formule au catalogue public (titre, description, image facultative, liste d'options). */
+function handleAdminAddCatalogueItem_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  const titre = clampStr_(data.titre, 200);
+  if (!titre) return jsonOut_({ ok: false, error: 'missing_field' });
+  const description = clampStr_(data.description, 500);
+  const lien = String(data.lien || '').trim();
+  const options = clampStr_(data.options, 3000);
+
+  return withLock_(() => {
+    const sheet = getCatalogueSheet_();
+    const ordre = sheet.getLastRow();
+    sheet.appendRow([titre, description, lien ? driveImageUrlFromInput_(lien) : '', options, ordre, 'Oui']);
+    return jsonOut_({ ok: true });
+  });
+}
+
+function handleAdminDeleteCatalogueItem_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  return withLock_(() => {
+    const rowIndex = Number(data.rowIndex);
+    const sheet = getCatalogueSheet_();
+    if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) return jsonOut_({ ok: false, error: 'not_found' });
+    sheet.deleteRow(rowIndex);
+    return jsonOut_({ ok: true });
+  });
+}
+
+/** Liste publique des formules du catalogue (pas d'authentification requise, contenu non sensible). */
+function handleCataloguePublic_() {
+  const values = getCatalogueSheet_().getDataRange().getValues();
+  const items = values.slice(1)
+    .map((r, idx) => ({
+      rowIndex: idx + 2,
+      titre: r[CATCOL['Titre']],
+      description: r[CATCOL['Description']],
+      url: r[CATCOL['URL image']],
+      options: String(r[CATCOL['Options (une par ligne)']] || '').split('\n').map(o => o.trim()).filter(Boolean),
+      ordre: Number(r[CATCOL['Ordre']]) || 0,
+      visible: String(r[CATCOL['Visible']]).trim().toLowerCase() !== 'non',
+    }))
+    .filter(item => item.visible && item.titre)
+    .sort((a, b) => a.ordre - b.ordre);
+  return jsonOut_({ ok: true, items });
 }
 
 /**
@@ -1340,6 +1406,7 @@ function doGet(e) {
   try {
     if (e.parameter.action === 'unsubscribe') return handleUnsubscribe_(e);
     if (e.parameter.action === 'gallery') return handleGalleryPublic_();
+    if (e.parameter.action === 'catalogue') return handleCataloguePublic_();
     if (e.parameter.action === 'googleReviews') return handleGoogleReviewsPublic_();
 
     const ref = (e.parameter.ref || '').trim();

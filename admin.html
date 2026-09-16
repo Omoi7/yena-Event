@@ -78,6 +78,7 @@
       <button type="button" class="admin-tab-btn active" data-admin-tab="reservations" role="tab" aria-selected="true">Réservations</button>
       <button type="button" class="admin-tab-btn" data-admin-tab="newsletter" role="tab" aria-selected="false">Newsletter</button>
       <button type="button" class="admin-tab-btn" data-admin-tab="galerie" role="tab" aria-selected="false">Galerie</button>
+      <button type="button" class="admin-tab-btn" data-admin-tab="catalogue" role="tab" aria-selected="false">Catalogue</button>
     </nav>
 
     <div class="admin-panel" id="adminPanel-reservations">
@@ -155,6 +156,41 @@
         </div>
       </form>
       <div class="admin-gallery-grid" id="galleryGridAdmin"></div>
+    </div>
+
+    <div class="admin-panel" id="adminPanel-catalogue" hidden>
+      <div class="admin-panel-head">
+        <h2>Catalogue (formules)</h2>
+      </div>
+      <p class="admin-newsletter-hint" style="margin-bottom:16px;">
+        Chaque formule ajoutée ici apparaît comme une carte dans l'onglet
+        « Catalogue » du site. Les options sont affichées quand le visiteur
+        clique sur la formule — une option par ligne. L'image est facultative
+        (même principe que pour la galerie : lien de partage Drive).
+      </p>
+      <form id="catalogueAddForm" class="admin-newsletter-form">
+        <div class="field">
+          <label for="catTitre">Titre de la formule</label>
+          <input type="text" id="catTitre" placeholder="Ex : Photobooth" required>
+        </div>
+        <div class="field">
+          <label for="catDescription">Description courte</label>
+          <textarea id="catDescription" rows="2" placeholder="Ex : Notre photobooth moderne et élégant, livré, installé et désinstallé pour vous."></textarea>
+        </div>
+        <div class="field">
+          <label for="catLien">Lien de partage Drive de l'image (facultatif)</label>
+          <input type="text" id="catLien" placeholder="https://drive.google.com/file/d/.../view">
+        </div>
+        <div class="field">
+          <label for="catOptions">Options (une par ligne)</label>
+          <textarea id="catOptions" rows="4" placeholder="Formule 2h&#10;Formule 4h&#10;Formule journée complète"></textarea>
+        </div>
+        <div class="admin-newsletter-actions">
+          <span></span>
+          <button type="submit" class="btn btn-primary" id="catAddBtn">Ajouter au catalogue</button>
+        </div>
+      </form>
+      <div class="admin-catalogue-list" id="catalogueListAdmin"></div>
     </div>
 
   </section>

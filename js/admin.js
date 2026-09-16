@@ -55,7 +55,7 @@ let statutsReservation = ['Nouvelle demande', 'Devis envoyé', 'Confirmé', 'Ter
 let depositPercent = 0.30;
 
 /* ====== Onglets du tableau de bord ====== */
-const ADMIN_TABS = ['reservations', 'newsletter', 'galerie'];
+const ADMIN_TABS = ['reservations', 'newsletter', 'galerie', 'catalogue'];
 document.getElementById('adminTabBar').addEventListener('click', (e) => {
   const btn = e.target.closest('.admin-tab-btn');
   if (!btn) return;
@@ -83,6 +83,7 @@ function showDashboard_() {
   logoutBtn.hidden = false;
   loadBookings_();
   loadGalleryAdmin_();
+  loadCatalogueAdmin_();
 }
 
 async function tryLogin_(key) {
@@ -431,6 +432,75 @@ galleryGridAdmin.addEventListener('click', async (e) => {
 
   showToast('Image supprimée.');
   loadGalleryAdmin_();
+});
+
+/* ====== Catalogue (formules) ====== */
+const catalogueListAdmin = document.getElementById('catalogueListAdmin');
+
+async function loadCatalogueAdmin_() {
+  catalogueListAdmin.innerHTML = '<p class="admin-empty">Chargement…</p>';
+  const url = getApiUrl_();
+  if (!url) { catalogueListAdmin.innerHTML = ''; return; }
+  try {
+    const res = await fetch(`${url}?action=catalogue`);
+    const data = await res.json();
+    if (!data.ok || !data.items.length) {
+      catalogueListAdmin.innerHTML = '<p class="admin-empty">Aucune formule pour le moment — le site affiche une formule "Photobooth" par défaut en attendant.</p>';
+      return;
+    }
+    catalogueListAdmin.innerHTML = data.items.map(item => `
+      <div class="admin-catalogue-item">
+        ${item.url ? `<img src="${escapeHtml_(item.url)}" alt="${escapeHtml_(item.titre)}" loading="lazy">` : ''}
+        <div class="admin-catalogue-item-body">
+          <h4>${escapeHtml_(item.titre)}</h4>
+          ${item.description ? `<p>${escapeHtml_(item.description)}</p>` : ''}
+          ${item.options.length ? `<ul>${item.options.map(o => `<li>${escapeHtml_(o)}</li>`).join('')}</ul>` : ''}
+        </div>
+        <button type="button" class="gal-delete" data-row="${item.rowIndex}" title="Supprimer">✕</button>
+      </div>
+    `).join('');
+  } catch (err) {
+    catalogueListAdmin.innerHTML = '<p class="admin-empty">Erreur de chargement.</p>';
+  }
+}
+
+document.getElementById('catalogueAddForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const titre = document.getElementById('catTitre').value.trim();
+  if (!titre) return;
+  const description = document.getElementById('catDescription').value.trim();
+  const lien = document.getElementById('catLien').value.trim();
+  const options = document.getElementById('catOptions').value.trim();
+
+  const btn = document.getElementById('catAddBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Ajout…';
+
+  const result = await callApi_({ type: 'adminAddCatalogueItem', adminKey, titre, description, lien, options });
+
+  btn.disabled = false;
+  btn.textContent = 'Ajouter au catalogue';
+
+  if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
+  if (!result.ok) { showToast("Erreur lors de l'ajout."); return; }
+
+  showToast('Formule ajoutée au catalogue !');
+  e.target.reset();
+  loadCatalogueAdmin_();
+});
+
+catalogueListAdmin.addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-row]');
+  if (!btn) return;
+  if (!confirm('Supprimer cette formule du catalogue ?')) return;
+  btn.disabled = true;
+
+  const result = await callApi_({ type: 'adminDeleteCatalogueItem', adminKey, rowIndex: Number(btn.dataset.row) });
+  if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
+  if (!result.ok) { showToast('Erreur, réessayez.'); btn.disabled = false; return; }
+
+  showToast('Formule supprimée.');
+  loadCatalogueAdmin_();
 });
 
 /* ====== Boot ====== */
