@@ -79,6 +79,7 @@
       <button type="button" class="admin-tab-btn" data-admin-tab="newsletter" role="tab" aria-selected="false">Newsletter</button>
       <button type="button" class="admin-tab-btn" data-admin-tab="galerie" role="tab" aria-selected="false">Galerie</button>
       <button type="button" class="admin-tab-btn" data-admin-tab="catalogue" role="tab" aria-selected="false">Catalogue</button>
+      <button type="button" class="admin-tab-btn" data-admin-tab="parametres" role="tab" aria-selected="false">Paramètres</button>
     </nav>
 
     <div class="admin-panel" id="adminPanel-reservations">
@@ -204,6 +205,55 @@
         </div>
       </form>
       <div class="admin-catalogue-list" id="catalogueListAdmin"></div>
+    </div>
+
+    <div class="admin-panel" id="adminPanel-parametres" hidden>
+      <div class="admin-panel-head">
+        <h2>Coordonnées de contact du site</h2>
+      </div>
+      <p class="admin-newsletter-hint" style="margin-bottom:16px;">
+        Ces informations sont affichées sur le site public (en-tête, section
+        Contact, bouton WhatsApp). Laissez un champ vide pour revenir à sa
+        valeur par défaut.
+      </p>
+      <form id="settingsForm" class="admin-newsletter-form">
+        <div class="field">
+          <label for="setPhone">Téléphone (affiché, ex : +33 6 12 34 56 78)</label>
+          <input type="text" id="setPhone" placeholder="+33 6 12 34 56 78">
+        </div>
+        <div class="field">
+          <label for="setEmail">Email de contact affiché sur le site</label>
+          <input type="email" id="setEmail" placeholder="contact@yena-event.fr">
+        </div>
+        <div class="field">
+          <label for="setWhatsapp">Numéro WhatsApp (avec indicatif, sans le +, sans espaces — ex : 33612345678)</label>
+          <input type="text" id="setWhatsapp" placeholder="33612345678">
+        </div>
+        <div class="field">
+          <label for="setZone">Zone géographique</label>
+          <input type="text" id="setZone" placeholder="Île-de-France">
+        </div>
+        <div class="field">
+          <label for="setHoraires">Horaires</label>
+          <input type="text" id="setHoraires" placeholder="Lun–Sam, 9h–19h">
+        </div>
+        <div class="field">
+          <label for="setInstagram">Lien Instagram (facultatif)</label>
+          <input type="text" id="setInstagram" placeholder="https://instagram.com/...">
+        </div>
+        <div class="field">
+          <label for="setFacebook">Lien Facebook (facultatif)</label>
+          <input type="text" id="setFacebook" placeholder="https://facebook.com/...">
+        </div>
+        <div class="field">
+          <label for="setPinterest">Lien Pinterest (facultatif)</label>
+          <input type="text" id="setPinterest" placeholder="https://pinterest.com/...">
+        </div>
+        <div class="admin-newsletter-actions">
+          <span></span>
+          <button type="submit" class="btn btn-primary" id="settingsSaveBtn">Enregistrer</button>
+        </div>
+      </form>
     </div>
 
   </section>

@@ -66,7 +66,7 @@ let statutsReservation = ['Nouvelle demande', 'Devis envoyé', 'Confirmé', 'Ter
 let depositPercent = 0.30;
 
 /* ====== Onglets du tableau de bord ====== */
-const ADMIN_TABS = ['reservations', 'newsletter', 'galerie', 'catalogue'];
+const ADMIN_TABS = ['reservations', 'newsletter', 'galerie', 'catalogue', 'parametres'];
 document.getElementById('adminTabBar').addEventListener('click', (e) => {
   const btn = e.target.closest('.admin-tab-btn');
   if (!btn) return;
@@ -95,6 +95,7 @@ function showDashboard_() {
   loadBookings_();
   loadGalleryAdmin_();
   loadCatalogueAdmin_();
+  loadSettingsAdmin_();
 }
 
 async function tryLogin_(key) {
@@ -568,6 +569,54 @@ catalogueListAdmin.addEventListener('click', async (e) => {
   showToast('Formule supprimée.');
   exitCatalogueEditMode_();
   loadCatalogueAdmin_();
+});
+
+/* ====== Paramètres (coordonnées de contact) ====== */
+async function loadSettingsAdmin_() {
+  const url = getApiUrl_();
+  if (!url) return;
+  try {
+    const res = await fetch(`${url}?action=settings`);
+    const data = await res.json();
+    if (!data.ok) return;
+    document.getElementById('setPhone').value = data.phone || '';
+    document.getElementById('setEmail').value = data.email || '';
+    document.getElementById('setWhatsapp').value = data.whatsapp || '';
+    document.getElementById('setZone').value = data.zone || '';
+    document.getElementById('setHoraires').value = data.horaires || '';
+    document.getElementById('setInstagram').value = data.instagram || '';
+    document.getElementById('setFacebook').value = data.facebook || '';
+    document.getElementById('setPinterest').value = data.pinterest || '';
+  } catch (err) { /* champs laissés vides, sans bloquer le reste de l'admin */ }
+}
+
+document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('settingsSaveBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Enregistrement…';
+
+  const result = await callApi_({
+    type: 'adminUpdateSettings',
+    adminKey,
+    phone: document.getElementById('setPhone').value.trim(),
+    email: document.getElementById('setEmail').value.trim(),
+    whatsapp: document.getElementById('setWhatsapp').value.trim(),
+    zone: document.getElementById('setZone').value.trim(),
+    horaires: document.getElementById('setHoraires').value.trim(),
+    instagram: document.getElementById('setInstagram').value.trim(),
+    facebook: document.getElementById('setFacebook').value.trim(),
+    pinterest: document.getElementById('setPinterest').value.trim(),
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Enregistrer';
+
+  if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
+  if (!result.ok) { showToast('Erreur lors de l\'enregistrement.'); return; }
+
+  showToast('Coordonnées enregistrées !');
+  loadSettingsAdmin_();
 });
 
 /* ====== Boot ====== */

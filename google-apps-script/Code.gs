@@ -115,6 +115,12 @@ const GOOGLE_REVIEW_LINK = 'https://maps.app.goo.gl/5UB9AKGLjTxDrgbWA';
 //   l'option 1.
 //
 // Si les deux sont configurées, SerpApi est utilisée en priorité.
+//
+// Si des avis qui ne concernent pas Yena Event s'affichent (fiche
+// homonyme/voisine mal filtrée par la recherche), épinglez manuellement la
+// bonne fiche en ajoutant la propriété de script SERPAPI_DATA_ID (identifiant
+// SerpApi de la fiche Google Maps exacte de Yena Event) — la recherche par
+// nom ci-dessous est alors totalement court-circuitée.
 const SERPAPI_BUSINESS_QUERY = 'Yena Event, Île-de-France, France';
 
 // Paiement de l'acompte en ligne (Stripe Checkout) : une seule propriété du
@@ -223,6 +229,16 @@ const CATALOGUE_TAB = 'Catalogue';
 const CATALOGUE_HEADERS = ['Titre', 'Description', 'URL image', 'Options (une par ligne)', 'Ordre', 'Visible'];
 const CATCOL = CATALOGUE_HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
 
+// Coordonnées de contact affichées sur le site public, modifiables depuis
+// l'admin (onglet "Paramètres") plutôt que codées en dur dans le HTML.
+const SETTINGS_TAB = 'Paramètres';
+const SETTINGS_HEADERS = ['Téléphone', 'Email de contact', 'WhatsApp (numéro seul, sans +)', 'Zone géographique', 'Horaires', 'Instagram', 'Facebook', 'Pinterest'];
+const SETCOL = SETTINGS_HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
+// Valeurs par défaut tant que Yena n'a rien renseigné depuis l'admin —
+// reprennent les anciens placeholders codés en dur, pour ne rien changer
+// visuellement avant la première configuration.
+const SETTINGS_DEFAULTS = ['+33 6 00 00 00 00', 'contact@yena-event.fr', '33600000000', 'Île-de-France', 'Lun–Sam, 9h–19h', '', '', ''];
+
 // Nom de l'onglet des réservations, utilisé pour le retrouver de façon fiable
 // (voir getSheet_ ci-dessous) même si Yena réordonne les onglets du classeur.
 const RESERVATIONS_TAB = 'Réservations (site web)';
@@ -291,6 +307,18 @@ function getCatalogueSheet_() {
   if (!sheet) {
     sheet = ss.insertSheet(CATALOGUE_TAB);
     sheet.appendRow(CATALOGUE_HEADERS);
+  }
+  return sheet;
+}
+
+/** Feuille "Paramètres" : une seule ligne de données (ligne 2) contenant les coordonnées de contact du site, créée avec les valeurs par défaut au premier appel. */
+function getSettingsSheet_() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName(SETTINGS_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(SETTINGS_TAB);
+    sheet.appendRow(SETTINGS_HEADERS);
+    sheet.appendRow(SETTINGS_DEFAULTS);
   }
   return sheet;
 }
@@ -386,6 +414,7 @@ function doPost(e) {
     if (data.type === 'adminAddCatalogueItem') return handleAdminAddCatalogueItem_(data);
     if (data.type === 'adminUpdateCatalogueItem') return handleAdminUpdateCatalogueItem_(data);
     if (data.type === 'adminDeleteCatalogueItem') return handleAdminDeleteCatalogueItem_(data);
+    if (data.type === 'adminUpdateSettings') return handleAdminUpdateSettings_(data);
     if (data.type === 'adminSetQuoteAmount') return handleAdminSetQuoteAmount_(data);
     if (data.type === 'adminMarkDepositPaid') return handleAdminMarkDepositPaid_(data);
     if (data.type === 'depositStatus') return handleDepositStatus_(data);
@@ -812,6 +841,47 @@ function handleCataloguePublic_() {
   return jsonOut_({ ok: true, items });
 }
 
+/* ====== Paramètres (coordonnées de contact), gérés depuis l'admin ====== */
+
+/** Coordonnées de contact publiques du site (pas d'authentification requise, contenu non sensible). */
+function handleSettingsPublic_() {
+  const values = getSettingsSheet_().getDataRange().getValues();
+  const row = values[1] || SETTINGS_DEFAULTS;
+  return jsonOut_({
+    ok: true,
+    phone: row[SETCOL['Téléphone']] || SETTINGS_DEFAULTS[SETCOL['Téléphone']],
+    email: row[SETCOL['Email de contact']] || SETTINGS_DEFAULTS[SETCOL['Email de contact']],
+    whatsapp: row[SETCOL['WhatsApp (numéro seul, sans +)']] || SETTINGS_DEFAULTS[SETCOL['WhatsApp (numéro seul, sans +)']],
+    zone: row[SETCOL['Zone géographique']] || SETTINGS_DEFAULTS[SETCOL['Zone géographique']],
+    horaires: row[SETCOL['Horaires']] || SETTINGS_DEFAULTS[SETCOL['Horaires']],
+    instagram: row[SETCOL['Instagram']] || '',
+    facebook: row[SETCOL['Facebook']] || '',
+    pinterest: row[SETCOL['Pinterest']] || '',
+  });
+}
+
+/** Met à jour les coordonnées de contact du site depuis l'admin. */
+function handleAdminUpdateSettings_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  const sheet = getSettingsSheet_();
+  const row = [
+    clampStr_(data.phone, 40) || SETTINGS_DEFAULTS[SETCOL['Téléphone']],
+    clampStr_(data.email, 200) || SETTINGS_DEFAULTS[SETCOL['Email de contact']],
+    clampStr_(data.whatsapp, 20).replace(/[^\d]/g, '') || SETTINGS_DEFAULTS[SETCOL['WhatsApp (numéro seul, sans +)']],
+    clampStr_(data.zone, 200) || SETTINGS_DEFAULTS[SETCOL['Zone géographique']],
+    clampStr_(data.horaires, 200) || SETTINGS_DEFAULTS[SETCOL['Horaires']],
+    clampStr_(data.instagram, 300),
+    clampStr_(data.facebook, 300),
+    clampStr_(data.pinterest, 300),
+  ];
+
+  return withLock_(() => {
+    sheet.getRange(2, 1, 1, SETTINGS_HEADERS.length).setValues([row]);
+    return jsonOut_({ ok: true });
+  });
+}
+
 /**
  * Avis Google réels de la fiche Yena Event, via SerpApi (gratuit, priorité)
  * ou l'API Google Places (payante, repli) selon ce qui est configuré dans
@@ -854,7 +924,11 @@ function handleGoogleReviewsPublic_() {
 function fetchReviewsFromSerpApi_(apiKey) {
   try {
     const cache = CacheService.getScriptCache();
-    let dataId = cache.get('serpapiDataId');
+    // Une fiche épinglée manuellement (voir SERPAPI_DATA_ID ci-dessus)
+    // court-circuite totalement la recherche par nom, qui peut se tromper de
+    // fiche si Yena Event est peu référencée sous cette requête.
+    const pinnedDataId = PropertiesService.getScriptProperties().getProperty('SERPAPI_DATA_ID');
+    let dataId = pinnedDataId || cache.get('serpapiDataId');
 
     if (!dataId) {
       const searchUrl = 'https://serpapi.com/search.json'
@@ -864,12 +938,16 @@ function fetchReviewsFromSerpApi_(apiKey) {
         + `&api_key=${encodeURIComponent(apiKey)}`;
       const searchRes = UrlFetchApp.fetch(searchUrl, { muteHttpExceptions: true });
       const searchJson = JSON.parse(searchRes.getContentText());
-      const firstResult = (searchJson.local_results && searchJson.local_results[0])
-        || searchJson.place_results;
-      if (!firstResult || !firstResult.data_id) {
+      const results = searchJson.local_results || (searchJson.place_results ? [searchJson.place_results] : []);
+      // Préfère un résultat dont le nom contient vraiment "yena" plutôt que
+      // de prendre aveuglément le premier résultat : une recherche par région
+      // large (Île-de-France) peut faire remonter une fiche homonyme ou
+      // voisine en premier si celle de Yena Event est peu référencée.
+      const match = results.find(r => r.title && r.title.toLowerCase().includes('yena')) || results[0];
+      if (!match || !match.data_id) {
         return { ok: false, error: 'serpapi_place_not_found', message: searchJson.error || '' };
       }
-      dataId = firstResult.data_id;
+      dataId = match.data_id;
       cache.put('serpapiDataId', dataId, 2592000); // 30 jours
     }
 
@@ -1474,6 +1552,7 @@ function doGet(e) {
     if (e.parameter.action === 'unsubscribe') return handleUnsubscribe_(e);
     if (e.parameter.action === 'gallery') return handleGalleryPublic_();
     if (e.parameter.action === 'catalogue') return handleCataloguePublic_();
+    if (e.parameter.action === 'settings') return handleSettingsPublic_();
     if (e.parameter.action === 'googleReviews') return handleGoogleReviewsPublic_();
 
     const ref = (e.parameter.ref || '').trim();

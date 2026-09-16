@@ -25,7 +25,7 @@ Site vitrine interactif pour l'agence évènementielle Yena Event (mariages, ann
 - **Catalogue relié au formulaire de réservation** : l'étape « Détails » propose un champ **Produit**, alimenté automatiquement par les formules du Catalogue, avec un second champ **Option** qui se met à jour selon le produit choisi (masqué si ce produit n'a pas d'options). Cliquer sur une formule ou une option précise du Catalogue va directement à cette étape, avec le produit et l'option déjà présélectionnés
 - **Galerie et Catalogue : image par upload direct ou par lien Drive**, au choix — plus besoin de passer par Drive pour ajouter une photo
 - **Galerie publique gérable depuis l'admin**, distincte des dossiers photos privés des clients
-- **Page d'administration** (`admin.html`, protégée par mot de passe, elle aussi en onglets) : bandeau de statistiques (demandes du mois, évènements confirmés à venir, acomptes encaissés, taux de conversion devis→payé), réservations avec suivi de statut, badges client récurrent/réduction en attente et gestion de l'acompte, activation de l'accès aux photos, gestion de la galerie et du catalogue, envoi de newsletter, export CSV — sans jamais ouvrir le Google Sheet
+- **Page d'administration** (`admin.html`, protégée par mot de passe, elle aussi en onglets) : bandeau de statistiques (demandes du mois, évènements confirmés à venir, acomptes encaissés, taux de conversion devis→payé), réservations avec suivi de statut, badges client récurrent/réduction en attente et gestion de l'acompte, activation de l'accès aux photos, gestion de la galerie et du catalogue, envoi de newsletter, export CSV, **modification des coordonnées de contact du site** (téléphone, email affiché, WhatsApp, zone géographique, horaires, réseaux sociaux) — sans jamais ouvrir le Google Sheet
 - Bouton WhatsApp flottant, formulaire de contact (envoyé par email à Yena) et inscription newsletter
 - Protection anti-spam (piège invisible + limite de fréquence) et anti-force-brute sur l'admin
 - Barre de progression de lecture, copie de référence en un clic, focus clavier accessible
@@ -241,13 +241,20 @@ automatiques, contact form silencieux côté Yena).
 
 ## Contenus à personnaliser avant mise en ligne définitive
 
-- **Bouton WhatsApp** (`index.html`, tout en bas) : numéro placeholder
-  `+33 6 00 00 00 00`, à remplacer par le vrai numéro WhatsApp.
-- Plus généralement, le téléphone et l'email affichés en plusieurs
-  endroits du site (`+33 6 00 00 00 00`, `contact@yena-event.fr`) sont
-  encore des exemples d'origine — seule l'adresse `yena.event7@gmail.com`
-  utilisée par le backend est réelle. La zone géographique affichée en
-  contact (« Île-de-France ») est en revanche réelle.
+- **Coordonnées de contact affichées sur le site** (téléphone, email de
+  contact, numéro WhatsApp, zone géographique, horaires, réseaux sociaux) :
+  modifiables directement depuis l'admin, onglet **« Paramètres »** — plus
+  besoin de toucher au code. Tant que rien n'est renseigné, le site affiche
+  des valeurs d'exemple (`+33 6 00 00 00 00`, `contact@yena-event.fr`...).
+  Seule l'adresse `yena.event7@gmail.com` utilisée par le backend
+  (envoi/réception des emails) n'est pas modifiable depuis l'admin — c'est
+  la vraie adresse Gmail de Yena, configurée directement dans Apps Script.
+- **Avis Google affichés** (section « Avis ») : si des avis qui ne
+  concernent pas Yena Event apparaissent, c'est que la recherche automatique
+  par nom (SerpApi) a trouvé une fiche homonyme ou voisine. Épinglez la
+  bonne fiche en ajoutant la propriété de script `SERPAPI_DATA_ID`
+  (identifiant SerpApi de la fiche exacte) — voir le commentaire au-dessus
+  de `SERPAPI_BUSINESS_QUERY` dans `Code.gs` pour le détail.
 
 ## Pistes envisagées mais non implémentées
 

@@ -18,6 +18,44 @@ function showToast(msg, duration = 3200) {
   showToast._t = setTimeout(() => toast.classList.remove('show'), duration);
 }
 
+/* ====== Coordonnées de contact (modifiables depuis l'admin) ====== */
+// Applique les coordonnées reçues du backend sur le DOM ; si le backend
+// n'est pas configuré ou ne répond pas, le HTML garde ses valeurs par défaut
+// (mêmes valeurs que SETTINGS_DEFAULTS côté Code.gs) sans erreur visible.
+async function loadSettings_() {
+  const url = window.YENA_CONFIG && window.YENA_CONFIG.APPS_SCRIPT_URL;
+  if (!url) return;
+  try {
+    const res = await fetch(`${url}?action=settings`);
+    const data = await res.json();
+    if (!data.ok) return;
+
+    const phoneHref = 'tel:' + data.phone.replace(/[^\d+]/g, '');
+    document.getElementById('headerPhoneLink').href = phoneHref;
+    document.getElementById('headerPhoneLink').textContent = `📞 ${data.phone}`;
+    document.getElementById('contactPhoneLink').href = phoneHref;
+    document.getElementById('contactPhoneLink').textContent = data.phone;
+
+    document.getElementById('contactEmailLink').href = 'mailto:' + data.email;
+    document.getElementById('contactEmailLink').textContent = data.email;
+
+    document.getElementById('contactZoneText').textContent = data.zone;
+    document.getElementById('contactHoursText').textContent = data.horaires;
+
+    if (data.whatsapp) {
+      document.getElementById('whatsappFloatLink').href = `https://wa.me/${data.whatsapp}`;
+    }
+
+    [['socialInstagram', data.instagram], ['socialFacebook', data.facebook], ['socialPinterest', data.pinterest]].forEach(([id, link]) => {
+      const el = document.getElementById(id);
+      if (link) { el.href = link; el.hidden = false; } else { el.hidden = true; }
+    });
+  } catch (err) {
+    // Le HTML garde ses valeurs par défaut.
+  }
+}
+loadSettings_();
+
 /* ====== Header scroll ====== */
 const header = document.getElementById('siteHeader');
 
