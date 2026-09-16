@@ -15,6 +15,17 @@ function escapeHtml_(value) {
   }[c]));
 }
 
+/** Convertit un fichier choisi par l'utilisateur en chaîne base64 (sans le préfixe data:...;base64,), pour l'envoyer au backend. */
+function fileToBase64_(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+const MEDIA_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
 function showToast(msg, duration = 3200) {
   const toast = document.getElementById('toast');
   toast.textContent = msg;
@@ -401,19 +412,25 @@ document.getElementById('galleryAddForm').addEventListener('submit', async (e) =
   e.preventDefault();
   const titre = document.getElementById('galTitre').value.trim();
   const lien = document.getElementById('galLien').value.trim();
-  if (!titre || !lien) return;
+  const file = document.getElementById('galFile').files[0];
+  if (!titre || (!lien && !file)) { showToast('Indiquez un titre et un fichier ou un lien Drive.'); return; }
+  if (file && file.size > MEDIA_MAX_IMAGE_BYTES) { showToast('Fichier trop lourd (5 Mo maximum).'); return; }
 
   const btn = document.getElementById('galAddBtn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Ajout…';
 
-  const result = await callApi_({ type: 'adminAddGalleryImage', adminKey, titre, lien });
+  const payload = { type: 'adminAddGalleryImage', adminKey, titre, lien };
+  if (!lien && file) {
+    payload.imageData = { name: file.name, mimeType: file.type || 'image/jpeg', data: await fileToBase64_(file) };
+  }
+  const result = await callApi_(payload);
 
   btn.disabled = false;
   btn.textContent = 'Ajouter à la galerie';
 
   if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
-  if (!result.ok) { showToast("Erreur lors de l'ajout, vérifiez le lien."); return; }
+  if (!result.ok) { showToast("Erreur lors de l'ajout, vérifiez le lien ou le fichier."); return; }
 
   showToast('Image ajoutée à la galerie !');
   e.target.reset();
@@ -436,6 +453,11 @@ galleryGridAdmin.addEventListener('click', async (e) => {
 
 /* ====== Catalogue (formules) ====== */
 const catalogueListAdmin = document.getElementById('catalogueListAdmin');
+const catalogueForm = document.getElementById('catalogueAddForm');
+const catAddBtn = document.getElementById('catAddBtn');
+const catCancelEditBtn = document.getElementById('catCancelEditBtn');
+const catEditHint = document.getElementById('catEditHint');
+let latestCatalogueItems = [];
 
 async function loadCatalogueAdmin_() {
   catalogueListAdmin.innerHTML = '<p class="admin-empty">Chargement…</p>';
@@ -444,11 +466,12 @@ async function loadCatalogueAdmin_() {
   try {
     const res = await fetch(`${url}?action=catalogue`);
     const data = await res.json();
-    if (!data.ok || !data.items.length) {
+    latestCatalogueItems = (data.ok && data.items) || [];
+    if (!latestCatalogueItems.length) {
       catalogueListAdmin.innerHTML = '<p class="admin-empty">Aucune formule pour le moment — le site affiche une formule "Photobooth" par défaut en attendant.</p>';
       return;
     }
-    catalogueListAdmin.innerHTML = data.items.map(item => `
+    catalogueListAdmin.innerHTML = latestCatalogueItems.map(item => `
       <div class="admin-catalogue-item">
         ${item.url ? `<img src="${escapeHtml_(item.url)}" alt="${escapeHtml_(item.titre)}" loading="lazy">` : ''}
         <div class="admin-catalogue-item-body">
@@ -456,7 +479,10 @@ async function loadCatalogueAdmin_() {
           ${item.description ? `<p>${escapeHtml_(item.description)}</p>` : ''}
           ${item.options.length ? `<ul>${item.options.map(o => `<li>${escapeHtml_(o)}</li>`).join('')}</ul>` : ''}
         </div>
-        <button type="button" class="gal-delete" data-row="${item.rowIndex}" title="Supprimer">✕</button>
+        <div class="admin-catalogue-item-actions">
+          <button type="button" class="btn-tiny cat-edit" data-row="${item.rowIndex}">Modifier</button>
+          <button type="button" class="gal-delete" data-row="${item.rowIndex}" title="Supprimer">✕</button>
+        </div>
       </div>
     `).join('');
   } catch (err) {
@@ -464,42 +490,83 @@ async function loadCatalogueAdmin_() {
   }
 }
 
-document.getElementById('catalogueAddForm').addEventListener('submit', async (e) => {
+function enterCatalogueEditMode_(item) {
+  document.getElementById('catEditRowIndex').value = item.rowIndex;
+  document.getElementById('catTitre').value = item.titre || '';
+  document.getElementById('catDescription').value = item.description || '';
+  document.getElementById('catLien').value = '';
+  document.getElementById('catFile').value = '';
+  document.getElementById('catOptions').value = (item.options || []).join('\n');
+  catAddBtn.textContent = 'Enregistrer les modifications';
+  catCancelEditBtn.hidden = false;
+  catEditHint.textContent = `Modification de « ${item.titre} » — l'image actuelle est conservée si vous ne la remplacez pas.`;
+  catalogueForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function exitCatalogueEditMode_() {
+  document.getElementById('catEditRowIndex').value = '';
+  catAddBtn.textContent = 'Ajouter au catalogue';
+  catCancelEditBtn.hidden = true;
+  catEditHint.textContent = '';
+  catalogueForm.reset();
+}
+
+catCancelEditBtn.addEventListener('click', exitCatalogueEditMode_);
+
+catalogueForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   const titre = document.getElementById('catTitre').value.trim();
   if (!titre) return;
   const description = document.getElementById('catDescription').value.trim();
   const lien = document.getElementById('catLien').value.trim();
+  const file = document.getElementById('catFile').files[0];
   const options = document.getElementById('catOptions').value.trim();
+  const editRowIndex = document.getElementById('catEditRowIndex').value;
+  if (file && file.size > MEDIA_MAX_IMAGE_BYTES) { showToast('Fichier trop lourd (5 Mo maximum).'); return; }
 
-  const btn = document.getElementById('catAddBtn');
+  const btn = catAddBtn;
+  const originalLabel = btn.textContent;
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>Ajout…';
+  btn.innerHTML = '<span class="spinner"></span>Enregistrement…';
 
-  const result = await callApi_({ type: 'adminAddCatalogueItem', adminKey, titre, description, lien, options });
+  const payload = editRowIndex
+    ? { type: 'adminUpdateCatalogueItem', adminKey, rowIndex: Number(editRowIndex), titre, description, lien, options }
+    : { type: 'adminAddCatalogueItem', adminKey, titre, description, lien, options };
+  if (!lien && file) {
+    payload.imageData = { name: file.name, mimeType: file.type || 'image/jpeg', data: await fileToBase64_(file) };
+  }
+  const result = await callApi_(payload);
 
   btn.disabled = false;
-  btn.textContent = 'Ajouter au catalogue';
+  btn.textContent = originalLabel;
 
   if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
-  if (!result.ok) { showToast("Erreur lors de l'ajout."); return; }
+  if (!result.ok) { showToast("Erreur lors de l'enregistrement."); return; }
 
-  showToast('Formule ajoutée au catalogue !');
-  e.target.reset();
+  showToast(editRowIndex ? 'Formule mise à jour !' : 'Formule ajoutée au catalogue !');
+  exitCatalogueEditMode_();
   loadCatalogueAdmin_();
 });
 
 catalogueListAdmin.addEventListener('click', async (e) => {
-  const btn = e.target.closest('button[data-row]');
-  if (!btn) return;
-  if (!confirm('Supprimer cette formule du catalogue ?')) return;
-  btn.disabled = true;
+  const editBtn = e.target.closest('.cat-edit');
+  if (editBtn) {
+    const item = latestCatalogueItems.find(i => i.rowIndex === Number(editBtn.dataset.row));
+    if (item) enterCatalogueEditMode_(item);
+    return;
+  }
 
-  const result = await callApi_({ type: 'adminDeleteCatalogueItem', adminKey, rowIndex: Number(btn.dataset.row) });
+  const delBtn = e.target.closest('.gal-delete[data-row]');
+  if (!delBtn) return;
+  if (!confirm('Supprimer cette formule du catalogue ?')) return;
+  delBtn.disabled = true;
+
+  const result = await callApi_({ type: 'adminDeleteCatalogueItem', adminKey, rowIndex: Number(delBtn.dataset.row) });
   if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
-  if (!result.ok) { showToast('Erreur, réessayez.'); btn.disabled = false; return; }
+  if (!result.ok) { showToast('Erreur, réessayez.'); delBtn.disabled = false; return; }
 
   showToast('Formule supprimée.');
+  exitCatalogueEditMode_();
   loadCatalogueAdmin_();
 });
 

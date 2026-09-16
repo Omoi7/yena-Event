@@ -189,6 +189,12 @@ const CONTOUR_FOLDER_NAME = 'Contours souhaités (client)';
 // ID du dossier Drive "Événements" où sont déjà rangés tous les dossiers clients.
 const EVENTS_FOLDER_ID = '1TE3TYCJag1w4jG2-uyGnAdXBEhA3fAOd';
 
+// Dossier Drive où sont rangées les images uploadées directement depuis
+// l'admin pour la Galerie et le Catalogue (créé automatiquement au premier
+// upload, à la racine du Drive du compte connecté à Apps Script).
+const MEDIA_FOLDER_NAME = 'Site Yena Event — Images (Galerie & Catalogue)';
+const MEDIA_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
 // ID du Google Sheet "Yena Event – Réservations (site web)" qui sert de base
 // de données. Le script est autonome (pas besoin d'être ouvert depuis le
 // Sheet) : il ouvre ce classeur par son ID à chaque appel.
@@ -385,6 +391,7 @@ function doPost(e) {
     if (data.type === 'adminAddGalleryImage') return handleAdminAddGalleryImage_(data);
     if (data.type === 'adminDeleteGalleryImage') return handleAdminDeleteGalleryImage_(data);
     if (data.type === 'adminAddCatalogueItem') return handleAdminAddCatalogueItem_(data);
+    if (data.type === 'adminUpdateCatalogueItem') return handleAdminUpdateCatalogueItem_(data);
     if (data.type === 'adminDeleteCatalogueItem') return handleAdminDeleteCatalogueItem_(data);
     if (data.type === 'adminSetQuoteAmount') return handleAdminSetQuoteAmount_(data);
     if (data.type === 'adminMarkDepositPaid') return handleAdminMarkDepositPaid_(data);
@@ -656,18 +663,53 @@ function driveImageUrlFromInput_(input) {
   return `https://drive.google.com/thumbnail?id=${id}&sz=w1000`;
 }
 
-/** Ajoute une image à la galerie publique du site (photo dont Yena a les droits de diffusion, distincte des dossiers photos privés clients). */
+function getMediaFolder_() {
+  const it = DriveApp.getRootFolder().getFoldersByName(MEDIA_FOLDER_NAME);
+  return it.hasNext() ? it.next() : DriveApp.getRootFolder().createFolder(MEDIA_FOLDER_NAME);
+}
+
+/**
+ * Enregistre une image envoyée en base64 depuis l'admin (upload direct d'un
+ * fichier, alternative au collage d'un lien Drive) dans le dossier dédié, la
+ * rend accessible via lien, et renvoie une URL d'affichage au même format
+ * que pour un lien collé. Renvoie null si les données sont absentes/invalides
+ * ou si le fichier dépasse la taille maximale autorisée.
+ */
+function uploadMediaImage_(imageData) {
+  if (!imageData || !imageData.data || !imageData.mimeType) return null;
+  // Une chaîne base64 fait environ 4/3 de la taille des octets décodés : on
+  // borne sa longueur plutôt que de décoder puis rejeter.
+  if (imageData.data.length > MEDIA_MAX_IMAGE_BYTES * 4 / 3) return null;
+  try {
+    const blob = Utilities.newBlob(Utilities.base64Decode(imageData.data), imageData.mimeType, clampStr_(imageData.name, 100) || 'image.jpg');
+    const file = getMediaFolder_().createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return driveImageUrlFromInput_(file.getId());
+  } catch (err) {
+    return null;
+  }
+}
+
+/** Détermine l'URL d'affichage d'une image à partir d'un lien Drive collé et/ou d'un fichier uploadé (le lien est prioritaire s'il est fourni). */
+function resolveImageUrl_(data) {
+  const lien = String(data.lien || '').trim();
+  if (lien) return driveImageUrlFromInput_(lien);
+  if (data.imageData) return uploadMediaImage_(data.imageData) || '';
+  return '';
+}
+
+/** Ajoute une image à la galerie publique du site (photo dont Yena a les droits de diffusion, distincte des dossiers photos privés clients). Accepte un lien Drive collé ou un fichier uploadé directement. */
 function handleAdminAddGalleryImage_(data) {
   if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
 
   const titre = clampStr_(data.titre, 200);
-  const lien = String(data.lien || '').trim();
-  if (!titre || !lien) return jsonOut_({ ok: false, error: 'missing_field' });
+  const url = resolveImageUrl_(data);
+  if (!titre || !url) return jsonOut_({ ok: false, error: 'missing_field' });
 
   return withLock_(() => {
     const sheet = getGalerieSheet_();
     const ordre = sheet.getLastRow();
-    sheet.appendRow([titre, driveImageUrlFromInput_(lien), ordre, 'Oui']);
+    sheet.appendRow([titre, url, ordre, 'Oui']);
     return jsonOut_({ ok: true });
   });
 }
@@ -702,20 +744,46 @@ function handleGalleryPublic_() {
 
 /* ====== Catalogue (formules), géré depuis l'admin ====== */
 
-/** Ajoute une formule au catalogue public (titre, description, image facultative, liste d'options). */
+/** Ajoute une formule au catalogue public (titre, description, image facultative — lien Drive ou fichier uploadé —, liste d'options). */
 function handleAdminAddCatalogueItem_(data) {
   if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
 
   const titre = clampStr_(data.titre, 200);
   if (!titre) return jsonOut_({ ok: false, error: 'missing_field' });
   const description = clampStr_(data.description, 500);
-  const lien = String(data.lien || '').trim();
+  const url = resolveImageUrl_(data);
   const options = clampStr_(data.options, 3000);
 
   return withLock_(() => {
     const sheet = getCatalogueSheet_();
     const ordre = sheet.getLastRow();
-    sheet.appendRow([titre, description, lien ? driveImageUrlFromInput_(lien) : '', options, ordre, 'Oui']);
+    sheet.appendRow([titre, description, url, options, ordre, 'Oui']);
+    return jsonOut_({ ok: true });
+  });
+}
+
+/**
+ * Modifie une formule existante du catalogue. L'image n'est remplacée que si
+ * un nouveau lien ou fichier est fourni — sinon l'image actuelle est
+ * conservée (Yena peut donc modifier juste le texte sans retoucher la photo).
+ */
+function handleAdminUpdateCatalogueItem_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  const titre = clampStr_(data.titre, 200);
+  if (!titre) return jsonOut_({ ok: false, error: 'missing_field' });
+  const description = clampStr_(data.description, 500);
+  const options = clampStr_(data.options, 3000);
+
+  return withLock_(() => {
+    const rowIndex = Number(data.rowIndex);
+    const sheet = getCatalogueSheet_();
+    if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) return jsonOut_({ ok: false, error: 'not_found' });
+
+    const newUrl = resolveImageUrl_(data);
+    const currentUrl = sheet.getRange(rowIndex, CATCOL['URL image'] + 1).getValue();
+
+    sheet.getRange(rowIndex, 1, 1, 4).setValues([[titre, description, newUrl || currentUrl, options]]);
     return jsonOut_({ ok: true });
   });
 }

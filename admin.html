@@ -137,9 +137,10 @@
       </div>
       <p class="admin-newsletter-hint" style="margin-bottom:16px;">
         Ajoutez ici des photos dont vous avez les droits de diffusion publique
-        (à distinguer des dossiers photos privés de vos clients). Dans Drive,
-        partagez l'image avec l'option « Tous les utilisateurs disposant du
-        lien peuvent consulter », puis collez ce lien ici.
+        (à distinguer des dossiers photos privés de vos clients) : soit en
+        uploadant directement un fichier, soit en collant un lien Drive déjà
+        partagé (« Tous les utilisateurs disposant du lien peuvent
+        consulter »). Un seul des deux suffit.
       </p>
       <form id="galleryAddForm" class="admin-newsletter-form">
         <div class="field">
@@ -147,8 +148,12 @@
           <input type="text" id="galTitre" placeholder="Ex : Mariage au domaine des Roses" required>
         </div>
         <div class="field">
-          <label for="galLien">Lien de partage Drive de l'image</label>
-          <input type="text" id="galLien" placeholder="https://drive.google.com/file/d/.../view" required>
+          <label for="galFile">Uploader un fichier (5 Mo max)</label>
+          <input type="file" id="galFile" accept="image/*">
+        </div>
+        <div class="field">
+          <label for="galLien">Ou lien de partage Drive de l'image</label>
+          <input type="text" id="galLien" placeholder="https://drive.google.com/file/d/.../view">
         </div>
         <div class="admin-newsletter-actions">
           <span></span>
@@ -165,10 +170,11 @@
       <p class="admin-newsletter-hint" style="margin-bottom:16px;">
         Chaque formule ajoutée ici apparaît comme une carte dans l'onglet
         « Catalogue » du site. Les options sont affichées quand le visiteur
-        clique sur la formule — une option par ligne. L'image est facultative
-        (même principe que pour la galerie : lien de partage Drive).
+        clique sur la formule — une option par ligne. L'image est facultative :
+        uploadez un fichier ou collez un lien Drive déjà partagé.
       </p>
       <form id="catalogueAddForm" class="admin-newsletter-form">
+        <input type="hidden" id="catEditRowIndex" value="">
         <div class="field">
           <label for="catTitre">Titre de la formule</label>
           <input type="text" id="catTitre" placeholder="Ex : Photobooth" required>
@@ -178,7 +184,11 @@
           <textarea id="catDescription" rows="2" placeholder="Ex : Notre photobooth moderne et élégant, livré, installé et désinstallé pour vous."></textarea>
         </div>
         <div class="field">
-          <label for="catLien">Lien de partage Drive de l'image (facultatif)</label>
+          <label for="catFile">Uploader un fichier (5 Mo max)</label>
+          <input type="file" id="catFile" accept="image/*">
+        </div>
+        <div class="field">
+          <label for="catLien">Ou lien de partage Drive de l'image</label>
           <input type="text" id="catLien" placeholder="https://drive.google.com/file/d/.../view">
         </div>
         <div class="field">
@@ -186,8 +196,11 @@
           <textarea id="catOptions" rows="4" placeholder="Formule 2h&#10;Formule 4h&#10;Formule journée complète"></textarea>
         </div>
         <div class="admin-newsletter-actions">
-          <span></span>
-          <button type="submit" class="btn btn-primary" id="catAddBtn">Ajouter au catalogue</button>
+          <span id="catEditHint"></span>
+          <span>
+            <button type="button" class="btn btn-outline" id="catCancelEditBtn" hidden>Annuler</button>
+            <button type="submit" class="btn btn-primary" id="catAddBtn">Ajouter au catalogue</button>
+          </span>
         </div>
       </form>
       <div class="admin-catalogue-list" id="catalogueListAdmin"></div>
