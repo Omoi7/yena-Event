@@ -232,12 +232,18 @@ const CATCOL = CATALOGUE_HEADERS.reduce((acc, name, i) => { acc[name] = i; retur
 // Coordonnées de contact affichées sur le site public, modifiables depuis
 // l'admin (onglet "Paramètres") plutôt que codées en dur dans le HTML.
 const SETTINGS_TAB = 'Paramètres';
-const SETTINGS_HEADERS = ['Téléphone', 'Email de contact', 'WhatsApp (numéro seul, sans +)', 'Zone géographique', 'Horaires', 'Instagram', 'Facebook', 'Pinterest'];
+const SETTINGS_HEADERS = ['Téléphone', 'Email de contact', 'WhatsApp (numéro seul, sans +)', 'Zone géographique', 'Horaires'];
 const SETCOL = SETTINGS_HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
 // Valeurs par défaut tant que Yena n'a rien renseigné depuis l'admin —
 // reprennent les anciens placeholders codés en dur, pour ne rien changer
 // visuellement avant la première configuration.
-const SETTINGS_DEFAULTS = ['+33 6 00 00 00 00', 'contact@yena-event.fr', '33600000000', 'Île-de-France', 'Lun–Sam, 9h–19h', '', '', ''];
+const SETTINGS_DEFAULTS = ['+33 6 00 00 00 00', 'contact@yena-event.fr', '33600000000', 'Île-de-France', 'Lun–Sam, 9h–19h'];
+
+// Réseaux sociaux affichés sur le site : liste libre (nom + lien) gérée
+// depuis l'admin, pour ne pas se limiter à Instagram/Facebook/Pinterest.
+const SOCIALS_TAB = 'Réseaux sociaux';
+const SOCIALS_HEADERS = ['Nom', 'Lien', 'Ordre'];
+const SOCOL = SOCIALS_HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
 
 // Nom de l'onglet des réservations, utilisé pour le retrouver de façon fiable
 // (voir getSheet_ ci-dessous) même si Yena réordonne les onglets du classeur.
@@ -319,6 +325,16 @@ function getSettingsSheet_() {
     sheet = ss.insertSheet(SETTINGS_TAB);
     sheet.appendRow(SETTINGS_HEADERS);
     sheet.appendRow(SETTINGS_DEFAULTS);
+  }
+  return sheet;
+}
+
+function getSocialsSheet_() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName(SOCIALS_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(SOCIALS_TAB);
+    sheet.appendRow(SOCIALS_HEADERS);
   }
   return sheet;
 }
@@ -415,6 +431,8 @@ function doPost(e) {
     if (data.type === 'adminUpdateCatalogueItem') return handleAdminUpdateCatalogueItem_(data);
     if (data.type === 'adminDeleteCatalogueItem') return handleAdminDeleteCatalogueItem_(data);
     if (data.type === 'adminUpdateSettings') return handleAdminUpdateSettings_(data);
+    if (data.type === 'adminAddSocialLink') return handleAdminAddSocialLink_(data);
+    if (data.type === 'adminDeleteSocialLink') return handleAdminDeleteSocialLink_(data);
     if (data.type === 'adminSetQuoteAmount') return handleAdminSetQuoteAmount_(data);
     if (data.type === 'adminMarkDepositPaid') return handleAdminMarkDepositPaid_(data);
     if (data.type === 'depositStatus') return handleDepositStatus_(data);
@@ -847,6 +865,18 @@ function handleCataloguePublic_() {
 function handleSettingsPublic_() {
   const values = getSettingsSheet_().getDataRange().getValues();
   const row = values[1] || SETTINGS_DEFAULTS;
+
+  const socialValues = getSocialsSheet_().getDataRange().getValues();
+  const socials = socialValues.slice(1)
+    .map((r, idx) => ({
+      rowIndex: idx + 2,
+      nom: r[SOCOL['Nom']],
+      lien: r[SOCOL['Lien']],
+      ordre: Number(r[SOCOL['Ordre']]) || 0,
+    }))
+    .filter(s => s.nom && s.lien)
+    .sort((a, b) => a.ordre - b.ordre);
+
   return jsonOut_({
     ok: true,
     phone: row[SETCOL['Téléphone']] || SETTINGS_DEFAULTS[SETCOL['Téléphone']],
@@ -854,13 +884,11 @@ function handleSettingsPublic_() {
     whatsapp: row[SETCOL['WhatsApp (numéro seul, sans +)']] || SETTINGS_DEFAULTS[SETCOL['WhatsApp (numéro seul, sans +)']],
     zone: row[SETCOL['Zone géographique']] || SETTINGS_DEFAULTS[SETCOL['Zone géographique']],
     horaires: row[SETCOL['Horaires']] || SETTINGS_DEFAULTS[SETCOL['Horaires']],
-    instagram: row[SETCOL['Instagram']] || '',
-    facebook: row[SETCOL['Facebook']] || '',
-    pinterest: row[SETCOL['Pinterest']] || '',
+    socials,
   });
 }
 
-/** Met à jour les coordonnées de contact du site depuis l'admin. */
+/** Met à jour les coordonnées de contact du site depuis l'admin (hors réseaux sociaux, gérés séparément — voir adminAddSocialLink/adminDeleteSocialLink). */
 function handleAdminUpdateSettings_(data) {
   if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
 
@@ -871,13 +899,38 @@ function handleAdminUpdateSettings_(data) {
     clampStr_(data.whatsapp, 20).replace(/[^\d]/g, '') || SETTINGS_DEFAULTS[SETCOL['WhatsApp (numéro seul, sans +)']],
     clampStr_(data.zone, 200) || SETTINGS_DEFAULTS[SETCOL['Zone géographique']],
     clampStr_(data.horaires, 200) || SETTINGS_DEFAULTS[SETCOL['Horaires']],
-    clampStr_(data.instagram, 300),
-    clampStr_(data.facebook, 300),
-    clampStr_(data.pinterest, 300),
   ];
 
   return withLock_(() => {
     sheet.getRange(2, 1, 1, SETTINGS_HEADERS.length).setValues([row]);
+    return jsonOut_({ ok: true });
+  });
+}
+
+/** Ajoute un réseau social (nom + lien libres) affiché sur le site public. */
+function handleAdminAddSocialLink_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  const nom = clampStr_(data.nom, 60);
+  const lien = clampStr_(data.lien, 300);
+  if (!nom || !lien) return jsonOut_({ ok: false, error: 'missing_field' });
+
+  return withLock_(() => {
+    const sheet = getSocialsSheet_();
+    const ordre = sheet.getLastRow();
+    sheet.appendRow([nom, lien, ordre]);
+    return jsonOut_({ ok: true });
+  });
+}
+
+function handleAdminDeleteSocialLink_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  return withLock_(() => {
+    const rowIndex = Number(data.rowIndex);
+    const sheet = getSocialsSheet_();
+    if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) return jsonOut_({ ok: false, error: 'not_found' });
+    sheet.deleteRow(rowIndex);
     return jsonOut_({ ok: true });
   });
 }

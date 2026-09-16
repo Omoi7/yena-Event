@@ -571,7 +571,9 @@ catalogueListAdmin.addEventListener('click', async (e) => {
   loadCatalogueAdmin_();
 });
 
-/* ====== Paramètres (coordonnées de contact) ====== */
+/* ====== Paramètres (coordonnées de contact + réseaux sociaux) ====== */
+let latestSocials = [];
+
 async function loadSettingsAdmin_() {
   const url = getApiUrl_();
   if (!url) return;
@@ -584,9 +586,22 @@ async function loadSettingsAdmin_() {
     document.getElementById('setWhatsapp').value = data.whatsapp || '';
     document.getElementById('setZone').value = data.zone || '';
     document.getElementById('setHoraires').value = data.horaires || '';
-    document.getElementById('setInstagram').value = data.instagram || '';
-    document.getElementById('setFacebook').value = data.facebook || '';
-    document.getElementById('setPinterest').value = data.pinterest || '';
+
+    latestSocials = data.socials || [];
+    const socialListAdmin = document.getElementById('socialListAdmin');
+    if (!latestSocials.length) {
+      socialListAdmin.innerHTML = '<p class="admin-empty">Aucun réseau social ajouté pour le moment.</p>';
+    } else {
+      socialListAdmin.innerHTML = latestSocials.map(s => `
+        <div class="admin-catalogue-item">
+          <div class="admin-catalogue-item-body">
+            <h4>${escapeHtml_(s.nom)}</h4>
+            <p>${escapeHtml_(s.lien)}</p>
+          </div>
+          <button type="button" class="gal-delete" data-row="${s.rowIndex}" title="Supprimer">✕</button>
+        </div>
+      `).join('');
+    }
   } catch (err) { /* champs laissés vides, sans bloquer le reste de l'admin */ }
 }
 
@@ -604,9 +619,6 @@ document.getElementById('settingsForm').addEventListener('submit', async (e) => 
     whatsapp: document.getElementById('setWhatsapp').value.trim(),
     zone: document.getElementById('setZone').value.trim(),
     horaires: document.getElementById('setHoraires').value.trim(),
-    instagram: document.getElementById('setInstagram').value.trim(),
-    facebook: document.getElementById('setFacebook').value.trim(),
-    pinterest: document.getElementById('setPinterest').value.trim(),
   });
 
   btn.disabled = false;
@@ -616,6 +628,43 @@ document.getElementById('settingsForm').addEventListener('submit', async (e) => 
   if (!result.ok) { showToast('Erreur lors de l\'enregistrement.'); return; }
 
   showToast('Coordonnées enregistrées !');
+  loadSettingsAdmin_();
+});
+
+document.getElementById('socialAddForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nom = document.getElementById('socNom').value.trim();
+  const lien = document.getElementById('socLien').value.trim();
+  if (!nom || !lien) return;
+
+  const btn = document.getElementById('socAddBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Ajout…';
+
+  const result = await callApi_({ type: 'adminAddSocialLink', adminKey, nom, lien });
+
+  btn.disabled = false;
+  btn.textContent = 'Ajouter';
+
+  if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
+  if (!result.ok) { showToast("Erreur lors de l'ajout."); return; }
+
+  showToast('Réseau social ajouté !');
+  e.target.reset();
+  loadSettingsAdmin_();
+});
+
+document.getElementById('socialListAdmin').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-row]');
+  if (!btn) return;
+  if (!confirm('Supprimer ce réseau social ?')) return;
+  btn.disabled = true;
+
+  const result = await callApi_({ type: 'adminDeleteSocialLink', adminKey, rowIndex: Number(btn.dataset.row) });
+  if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
+  if (!result.ok) { showToast('Erreur, réessayez.'); btn.disabled = false; return; }
+
+  showToast('Réseau social supprimé.');
   loadSettingsAdmin_();
 });
 

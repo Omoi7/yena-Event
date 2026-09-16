@@ -46,10 +46,12 @@ async function loadSettings_() {
       document.getElementById('whatsappFloatLink').href = `https://wa.me/${data.whatsapp}`;
     }
 
-    [['socialInstagram', data.instagram], ['socialFacebook', data.facebook], ['socialPinterest', data.pinterest]].forEach(([id, link]) => {
-      const el = document.getElementById(id);
-      if (link) { el.href = link; el.hidden = false; } else { el.hidden = true; }
-    });
+    const socialRow = document.getElementById('socialRow');
+    if (data.socials && data.socials.length) {
+      socialRow.innerHTML = data.socials.map(s =>
+        `<a href="${escapeHtml_(s.lien)}" target="_blank" rel="noopener" aria-label="${escapeHtml_(s.nom)}">${escapeHtml_(s.nom)}</a>`
+      ).join('');
+    }
   } catch (err) {
     // Le HTML garde ses valeurs par défaut.
   }

@@ -237,23 +237,33 @@
           <label for="setHoraires">Horaires</label>
           <input type="text" id="setHoraires" placeholder="Lun–Sam, 9h–19h">
         </div>
-        <div class="field">
-          <label for="setInstagram">Lien Instagram (facultatif)</label>
-          <input type="text" id="setInstagram" placeholder="https://instagram.com/...">
-        </div>
-        <div class="field">
-          <label for="setFacebook">Lien Facebook (facultatif)</label>
-          <input type="text" id="setFacebook" placeholder="https://facebook.com/...">
-        </div>
-        <div class="field">
-          <label for="setPinterest">Lien Pinterest (facultatif)</label>
-          <input type="text" id="setPinterest" placeholder="https://pinterest.com/...">
-        </div>
         <div class="admin-newsletter-actions">
           <span></span>
           <button type="submit" class="btn btn-primary" id="settingsSaveBtn">Enregistrer</button>
         </div>
       </form>
+
+      <div class="admin-panel-head" style="margin-top:36px;">
+        <h2>Réseaux sociaux</h2>
+      </div>
+      <p class="admin-newsletter-hint" style="margin-bottom:16px;">
+        Ajoutez autant de réseaux que vous voulez (Instagram, TikTok, LinkedIn, site web…), affichés dans cet ordre sur le site.
+      </p>
+      <form id="socialAddForm" class="admin-newsletter-form">
+        <div class="field">
+          <label for="socNom">Nom (affiché sur le site)</label>
+          <input type="text" id="socNom" placeholder="Ex : Instagram" required>
+        </div>
+        <div class="field">
+          <label for="socLien">Lien</label>
+          <input type="text" id="socLien" placeholder="https://instagram.com/yenaevent" required>
+        </div>
+        <div class="admin-newsletter-actions">
+          <span></span>
+          <button type="submit" class="btn btn-primary" id="socAddBtn">Ajouter</button>
+        </div>
+      </form>
+      <div class="admin-catalogue-list" id="socialListAdmin"></div>
     </div>
 
   </section>
