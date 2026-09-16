@@ -170,6 +170,7 @@ em{font-style:italic; color:var(--gold);}
 }
 .about-badge strong{display:block; font-family:var(--font-display); font-size:1.6rem; color:var(--brown);}
 .about-badge span{font-size:.78rem; color:var(--text-soft);}
+.about-tagline{font-family:var(--font-display); font-style:italic; font-size:1.15rem; color:var(--brown); margin:4px 0 0;}
 .check-list{margin:20px 0 28px; display:flex; flex-direction:column; gap:10px;}
 .check-list li{padding-left:28px; position:relative; color:var(--text-soft);}
 .check-list li::before{content:"✓"; position:absolute; left:0; top:0; color:var(--gold); font-weight:700;}
