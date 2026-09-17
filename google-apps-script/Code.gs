@@ -337,6 +337,20 @@ function getCatalogueSheet_() {
   if (!sheet) {
     sheet = ss.insertSheet(CATALOGUE_TAB);
     sheet.appendRow(CATALOGUE_HEADERS);
+    return sheet;
+  }
+  // Un onglet "Catalogue" créé avant l'ajout de la colonne "ID" (en tête,
+  // pas en fin de liste comme d'habitude) a encore "Titre" en colonne A. On
+  // insère une colonne vide au début pour décaler les données déjà
+  // présentes vers la droite, plutôt que de simplement réécrire l'en-tête —
+  // ce qui désynchroniserait sinon les lignes existantes de leurs colonnes.
+  const currentHeaders = sheet.getLastRow() > 0 ? sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getValues()[0] : [];
+  if (currentHeaders.length && currentHeaders[0] !== CATALOGUE_HEADERS[0]) {
+    sheet.insertColumnBefore(1);
+  }
+  const refreshedHeaders = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), 1)).getValues()[0];
+  if (CATALOGUE_HEADERS.some((h, i) => refreshedHeaders[i] !== h)) {
+    sheet.getRange(1, 1, 1, CATALOGUE_HEADERS.length).setValues([CATALOGUE_HEADERS]);
   }
   return sheet;
 }
