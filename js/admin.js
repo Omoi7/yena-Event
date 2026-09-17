@@ -479,7 +479,7 @@ async function loadCatalogueAdmin_() {
         <div class="admin-catalogue-item-body">
           <h4>${escapeHtml_(item.titre)}</h4>
           ${item.description ? `<p>${escapeHtml_(item.description)}</p>` : ''}
-          ${item.options.length ? `<ul>${item.options.map(o => `<li>${escapeHtml_(o)}</li>`).join('')}</ul>` : ''}
+          ${item.options.length ? `<ul>${item.options.map(o => `<li>${escapeHtml_(o.label)}${o.flyerUrl ? ' 📎' : ''}</li>`).join('')}</ul>` : ''}
         </div>
         <div class="admin-catalogue-item-actions">
           <button type="button" class="btn-tiny cat-edit" data-row="${item.rowIndex}">Modifier</button>
@@ -490,6 +490,8 @@ async function loadCatalogueAdmin_() {
   } catch (err) {
     catalogueListAdmin.innerHTML = '<p class="admin-empty">Erreur de chargement.</p>';
   }
+  populateCatOptFormuleSelect_();
+  loadCatalogueOptionsAdmin_();
 }
 
 function enterCatalogueEditMode_(item) {
@@ -498,7 +500,7 @@ function enterCatalogueEditMode_(item) {
   document.getElementById('catDescription').value = item.description || '';
   document.getElementById('catLien').value = '';
   document.getElementById('catFile').value = '';
-  document.getElementById('catOptions').value = (item.options || []).join('\n');
+  document.getElementById('catOptions').value = (item.options || []).filter(o => !o.flyerUrl).map(o => o.label).join('\n');
   catAddBtn.textContent = 'Enregistrer les modifications';
   catCancelEditBtn.hidden = false;
   catEditHint.textContent = `Modification de « ${item.titre} » — l'image actuelle est conservée si vous ne la remplacez pas.`;
@@ -570,6 +572,90 @@ catalogueListAdmin.addEventListener('click', async (e) => {
   showToast('Formule supprimée.');
   exitCatalogueEditMode_();
   loadCatalogueAdmin_();
+});
+
+/* ====== Options de catalogue avec flyer ====== */
+const catOptFormuleSelect = document.getElementById('catOptFormule');
+const catalogueOptionsListAdmin = document.getElementById('catalogueOptionsListAdmin');
+
+/** (Re)construit la liste déroulante "Formule concernée" à partir des formules actuellement connues. */
+function populateCatOptFormuleSelect_() {
+  const previous = catOptFormuleSelect.value;
+  catOptFormuleSelect.innerHTML = latestCatalogueItems
+    .filter(item => item.id)
+    .map(item => `<option value="${escapeHtml_(item.id)}">${escapeHtml_(item.titre)}</option>`)
+    .join('');
+  if ([...catOptFormuleSelect.options].some(o => o.value === previous)) catOptFormuleSelect.value = previous;
+}
+
+async function loadCatalogueOptionsAdmin_() {
+  const url = getApiUrl_();
+  if (!url) return;
+  const result = await callApi_({ type: 'adminListCatalogueOptions', adminKey });
+  if (!result.ok || !result.options) { catalogueOptionsListAdmin.innerHTML = ''; return; }
+
+  if (!result.options.length) {
+    catalogueOptionsListAdmin.innerHTML = '<p class="admin-empty">Aucune option avec flyer pour le moment.</p>';
+    return;
+  }
+  catalogueOptionsListAdmin.innerHTML = result.options.map(opt => {
+    const formule = latestCatalogueItems.find(item => item.id === opt.idFormule);
+    return `
+      <div class="admin-catalogue-item">
+        <div class="admin-catalogue-item-body">
+          <h4>${escapeHtml_(opt.label)}</h4>
+          <p>${formule ? escapeHtml_(formule.titre) : 'Formule supprimée'}${opt.flyerUrl ? ` · <a href="${escapeHtml_(opt.flyerUrl)}" target="_blank" rel="noopener">Voir le flyer</a>` : ' · Aucun flyer'}</p>
+        </div>
+        <button type="button" class="gal-delete" data-row="${opt.rowIndex}" title="Supprimer">✕</button>
+      </div>
+    `;
+  }).join('');
+}
+
+document.getElementById('catOptionAddForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const idFormule = catOptFormuleSelect.value;
+  const option = document.getElementById('catOptLabel').value.trim();
+  const lien = document.getElementById('catOptFlyerLien').value.trim();
+  const file = document.getElementById('catOptFlyerFile').files[0];
+  if (!idFormule) { showToast('Ajoutez au moins une formule au catalogue avant d\'ajouter une option.'); return; }
+  if (!option) return;
+  if (file && file.size > MEDIA_MAX_IMAGE_BYTES) { showToast('Fichier trop lourd (5 Mo maximum).'); return; }
+
+  const btn = document.getElementById('catOptAddBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Ajout…';
+
+  const payload = { type: 'adminAddCatalogueOption', adminKey, idFormule, option, lien };
+  if (!lien && file) {
+    payload.flyerData = { name: file.name, mimeType: file.type || 'application/pdf', data: await fileToBase64_(file) };
+  }
+  const result = await callApi_(payload);
+
+  btn.disabled = false;
+  btn.textContent = 'Ajouter l\'option';
+
+  if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
+  if (!result.ok) { showToast("Erreur lors de l'ajout."); return; }
+
+  showToast('Option ajoutée !');
+  e.target.reset();
+  populateCatOptFormuleSelect_();
+  loadCatalogueOptionsAdmin_();
+});
+
+catalogueOptionsListAdmin.addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-row]');
+  if (!btn) return;
+  if (!confirm('Supprimer cette option ?')) return;
+  btn.disabled = true;
+
+  const result = await callApi_({ type: 'adminDeleteCatalogueOption', adminKey, rowIndex: Number(btn.dataset.row) });
+  if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
+  if (!result.ok) { showToast('Erreur, réessayez.'); btn.disabled = false; return; }
+
+  showToast('Option supprimée.');
+  loadCatalogueOptionsAdmin_();
 });
 
 /* ====== Carrousel de l'accueil (photos/vidéos) ====== */

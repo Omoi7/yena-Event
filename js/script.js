@@ -362,11 +362,11 @@ const CATALOGUE_PLACEHOLDER = [
     description: "Notre photobooth moderne et élégant, avec designs personnalisés et impressions de haute qualité, livré, installé et désinstallé pour vous.",
     url: '',
     options: [
-      'Formule 2h — idéale pour un cocktail ou une petite réception',
-      'Formule 4h — pour couvrir l\'essentiel de votre soirée',
-      'Formule journée complète — pour ne rater aucun moment',
-      'Impressions illimitées avec cadre personnalisé à vos couleurs',
-      'Accessoires et fond de décor sur demande',
+      { label: 'Formule 2h — idéale pour un cocktail ou une petite réception', flyerUrl: '' },
+      { label: 'Formule 4h — pour couvrir l\'essentiel de votre soirée', flyerUrl: '' },
+      { label: 'Formule journée complète — pour ne rater aucun moment', flyerUrl: '' },
+      { label: 'Impressions illimitées avec cadre personnalisé à vos couleurs', flyerUrl: '' },
+      { label: 'Accessoires et fond de décor sur demande', flyerUrl: '' },
     ],
   },
 ];
@@ -385,8 +385,8 @@ function renderCatalogueItems_(items) {
     card.className = 'pricing-card reveal catalogue-card';
     const optionsHtml = item.options.map(o => `
       <li>
-        <span>${escapeHtml_(o)}</span>
-        <button type="button" class="btn-tiny option-pick" data-product="${escapeHtml_(item.titre)}" data-option="${escapeHtml_(o)}">Choisir</button>
+        <span>${escapeHtml_(o.label)}</span>
+        <button type="button" class="btn-tiny option-pick" data-product="${escapeHtml_(item.titre)}" data-option="${escapeHtml_(o.label)}" data-flyer="${escapeHtml_(o.flyerUrl || '')}">Choisir</button>
       </li>
     `).join('');
     card.innerHTML = `
@@ -413,7 +413,13 @@ function renderCatalogueItems_(items) {
   });
 
   catalogueGrid.querySelectorAll('.catalogue-cta, .option-pick').forEach(btn => {
-    btn.addEventListener('click', () => goToReservationWithProduct_(btn.dataset.product, btn.dataset.option || ''));
+    btn.addEventListener('click', () => {
+      // Choisir une option précise qui a un flyer associé : on l'ouvre dans
+      // un nouvel onglet, en plus de présélectionner le produit/l'option
+      // dans le formulaire de réservation.
+      if (btn.dataset.flyer) window.open(btn.dataset.flyer, '_blank', 'noopener');
+      goToReservationWithProduct_(btn.dataset.product, btn.dataset.option || '');
+    });
   });
 
   populateProduitSelect_();
@@ -459,8 +465,8 @@ function updateProduitOptionSelect_(preselectOption) {
   produitOptionField.hidden = false;
   produitOptionSelect.innerHTML =
     '<option value="">Sélectionner une option…</option>' +
-    options.map(o => `<option value="${escapeHtml_(o)}">${escapeHtml_(o)}</option>`).join('');
-  if (preselectOption && options.includes(preselectOption)) produitOptionSelect.value = preselectOption;
+    options.map(o => `<option value="${escapeHtml_(o.label)}">${escapeHtml_(o.label)}</option>`).join('');
+  if (preselectOption && options.some(o => o.label === preselectOption)) produitOptionSelect.value = preselectOption;
 }
 
 produitSelect.addEventListener('change', () => updateProduitOptionSelect_());

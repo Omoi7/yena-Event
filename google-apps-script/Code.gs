@@ -226,8 +226,21 @@ const GALERIE_HEADERS = ['Titre', 'URL image', 'Ordre', 'Visible'];
 const GCOL = GALERIE_HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
 
 const CATALOGUE_TAB = 'Catalogue';
-const CATALOGUE_HEADERS = ['Titre', 'Description', 'URL image', 'Options (une par ligne)', 'Ordre', 'Visible'];
+// 'ID' identifie une formule de façon stable (généré à sa création), pour
+// que ses options (onglet "Options catalogue" ci-dessous) restent liées à
+// elle même si d'autres formules sont ajoutées/supprimées/réordonnées —
+// contrairement à la position de la ligne (rowIndex), qui elle peut changer.
+const CATALOGUE_HEADERS = ['ID', 'Titre', 'Description', 'URL image', 'Options (une par ligne)', 'Ordre', 'Visible'];
 const CATCOL = CATALOGUE_HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
+
+// Options détaillées d'une formule du catalogue, chacune avec son propre
+// flyer explicatif facultatif (PDF ou image) qui s'ouvre quand le visiteur
+// choisit cette option précise sur le site. Remplace pour les nouvelles
+// formules l'ancien champ "Options (une par ligne)" (conservé en repli pour
+// les formules créées avant l'ajout de cette fonctionnalité).
+const CATALOGUE_OPTIONS_TAB = 'Options catalogue';
+const CATOPTCOL_HEADERS = ['ID formule', 'Option', 'URL flyer', 'Ordre'];
+const CATOPTCOL = CATOPTCOL_HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
 
 // Coordonnées de contact affichées sur le site public, modifiables depuis
 // l'admin (onglet "Paramètres") plutôt que codées en dur dans le HTML.
@@ -451,6 +464,9 @@ function doPost(e) {
     if (data.type === 'adminAddCatalogueItem') return handleAdminAddCatalogueItem_(data);
     if (data.type === 'adminUpdateCatalogueItem') return handleAdminUpdateCatalogueItem_(data);
     if (data.type === 'adminDeleteCatalogueItem') return handleAdminDeleteCatalogueItem_(data);
+    if (data.type === 'adminAddCatalogueOption') return handleAdminAddCatalogueOption_(data);
+    if (data.type === 'adminDeleteCatalogueOption') return handleAdminDeleteCatalogueOption_(data);
+    if (data.type === 'adminListCatalogueOptions') return handleAdminListCatalogueOptions_(data);
     if (data.type === 'adminUpdateSettings') return handleAdminUpdateSettings_(data);
     if (data.type === 'adminAddSocialLink') return handleAdminAddSocialLink_(data);
     if (data.type === 'adminDeleteSocialLink') return handleAdminDeleteSocialLink_(data);
@@ -762,6 +778,36 @@ function resolveImageUrl_(data) {
   return '';
 }
 
+/** Construit une URL Drive "ouvrir/visualiser" (fonctionne aussi bien pour un PDF que pour une image), à partir d'un lien de partage ou d'un identifiant brut. */
+function driveFileViewUrl_(input) {
+  const s = String(input || '').trim();
+  const match = s.match(/[-\w]{20,}/);
+  const id = match ? match[0] : s;
+  return `https://drive.google.com/file/d/${id}/view`;
+}
+
+/** Enregistre un fichier (flyer PDF ou image) envoyé en base64 depuis l'admin, dans le même dossier Drive dédié que les autres médias uploadés. Renvoie null si les données sont absentes/invalides ou si le fichier dépasse la taille maximale autorisée. */
+function uploadFlyerFile_(fileData) {
+  if (!fileData || !fileData.data || !fileData.mimeType) return null;
+  if (fileData.data.length > MEDIA_MAX_IMAGE_BYTES * 4 / 3) return null;
+  try {
+    const blob = Utilities.newBlob(Utilities.base64Decode(fileData.data), fileData.mimeType, clampStr_(fileData.name, 100) || 'flyer.pdf');
+    const file = getMediaFolder_().createFile(blob);
+    file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return driveFileViewUrl_(file.getId());
+  } catch (err) {
+    return null;
+  }
+}
+
+/** Détermine l'URL du flyer d'une option de catalogue, à partir d'un lien Drive collé et/ou d'un fichier (PDF/image) uploadé (le lien est prioritaire s'il est fourni). */
+function resolveFlyerUrl_(data) {
+  const lien = String(data.lien || '').trim();
+  if (lien) return driveFileViewUrl_(lien);
+  if (data.flyerData) return uploadFlyerFile_(data.flyerData) || '';
+  return '';
+}
+
 /** Ajoute une image à la galerie publique du site (photo dont Yena a les droits de diffusion, distincte des dossiers photos privés clients). Accepte un lien Drive collé ou un fichier uploadé directement. */
 function handleAdminAddGalleryImage_(data) {
   if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
@@ -808,7 +854,7 @@ function handleGalleryPublic_() {
 
 /* ====== Catalogue (formules), géré depuis l'admin ====== */
 
-/** Ajoute une formule au catalogue public (titre, description, image facultative — lien Drive ou fichier uploadé —, liste d'options). */
+/** Ajoute une formule au catalogue public (titre, description, image facultative — lien Drive ou fichier uploadé —, liste d'options en texte, ou options détaillées ajoutées séparément ensuite). */
 function handleAdminAddCatalogueItem_(data) {
   if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
 
@@ -817,12 +863,13 @@ function handleAdminAddCatalogueItem_(data) {
   const description = clampStr_(data.description, 500);
   const url = resolveImageUrl_(data);
   const options = clampStr_(data.options, 3000);
+  const id = Utilities.getUuid();
 
   return withLock_(() => {
     const sheet = getCatalogueSheet_();
     const ordre = sheet.getLastRow();
-    sheet.appendRow([titre, description, url, options, ordre, 'Oui']);
-    return jsonOut_({ ok: true });
+    sheet.appendRow([id, titre, description, url, options, ordre, 'Oui']);
+    return jsonOut_({ ok: true, id });
   });
 }
 
@@ -846,9 +893,13 @@ function handleAdminUpdateCatalogueItem_(data) {
 
     const newUrl = resolveImageUrl_(data);
     const currentUrl = sheet.getRange(rowIndex, CATCOL['URL image'] + 1).getValue();
+    // Une formule créée avant l'ajout de la colonne ID n'en a pas encore :
+    // on lui en attribue une à la première modification, pour que ses
+    // options détaillées (ajoutées séparément) puissent s'y rattacher.
+    const currentId = sheet.getRange(rowIndex, CATCOL['ID'] + 1).getValue() || Utilities.getUuid();
 
-    sheet.getRange(rowIndex, 1, 1, 4).setValues([[titre, description, newUrl || currentUrl, options]]);
-    return jsonOut_({ ok: true });
+    sheet.getRange(rowIndex, CATCOL['ID'] + 1, 1, 5).setValues([[currentId, titre, description, newUrl || currentUrl, options]]);
+    return jsonOut_({ ok: true, id: currentId });
   });
 }
 
@@ -859,7 +910,18 @@ function handleAdminDeleteCatalogueItem_(data) {
     const rowIndex = Number(data.rowIndex);
     const sheet = getCatalogueSheet_();
     if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) return jsonOut_({ ok: false, error: 'not_found' });
+    const id = sheet.getRange(rowIndex, CATCOL['ID'] + 1).getValue();
     sheet.deleteRow(rowIndex);
+
+    // Nettoie aussi les options détaillées associées à cette formule, pour
+    // ne pas laisser de lignes orphelines dans l'onglet "Options catalogue".
+    if (id) {
+      const optSheet = getCatalogueOptionsSheet_();
+      const optValues = optSheet.getDataRange().getValues();
+      for (let i = optValues.length - 1; i >= 1; i--) {
+        if (optValues[i][CATOPTCOL['ID formule']] === id) optSheet.deleteRow(i + 1);
+      }
+    }
     return jsonOut_({ ok: true });
   });
 }
@@ -867,19 +929,101 @@ function handleAdminDeleteCatalogueItem_(data) {
 /** Liste publique des formules du catalogue (pas d'authentification requise, contenu non sensible). */
 function handleCataloguePublic_() {
   const values = getCatalogueSheet_().getDataRange().getValues();
+  const allOptionRows = getCatalogueOptionsSheet_().getDataRange().getValues().slice(1);
+
   const items = values.slice(1)
-    .map((r, idx) => ({
-      rowIndex: idx + 2,
-      titre: r[CATCOL['Titre']],
-      description: r[CATCOL['Description']],
-      url: r[CATCOL['URL image']],
-      options: String(r[CATCOL['Options (une par ligne)']] || '').split('\n').map(o => o.trim()).filter(Boolean),
-      ordre: Number(r[CATCOL['Ordre']]) || 0,
-      visible: String(r[CATCOL['Visible']]).trim().toLowerCase() !== 'non',
-    }))
+    .map((r, idx) => {
+      const id = r[CATCOL['ID']];
+      const detailedOptions = id
+        ? allOptionRows
+            .map((o, oIdx) => ({
+              rowIndex: oIdx + 2,
+              idFormule: o[CATOPTCOL['ID formule']],
+              label: o[CATOPTCOL['Option']],
+              flyerUrl: o[CATOPTCOL['URL flyer']] || '',
+              ordre: Number(o[CATOPTCOL['Ordre']]) || 0,
+            }))
+            .filter(o => o.idFormule === id && o.label)
+            .sort((a, b) => a.ordre - b.ordre)
+            .map(o => ({ label: o.label, flyerUrl: o.flyerUrl }))
+        : [];
+      // Repli sur l'ancien champ texte "une option par ligne" pour les
+      // formules qui n'ont pas encore d'options détaillées (avec flyer).
+      const legacyOptions = String(r[CATCOL['Options (une par ligne)']] || '')
+        .split('\n').map(o => o.trim()).filter(Boolean)
+        .map(label => ({ label, flyerUrl: '' }));
+
+      return {
+        rowIndex: idx + 2,
+        id,
+        titre: r[CATCOL['Titre']],
+        description: r[CATCOL['Description']],
+        url: r[CATCOL['URL image']],
+        options: detailedOptions.length ? detailedOptions : legacyOptions,
+        ordre: Number(r[CATCOL['Ordre']]) || 0,
+        visible: String(r[CATCOL['Visible']]).trim().toLowerCase() !== 'non',
+      };
+    })
     .filter(item => item.visible && item.titre)
     .sort((a, b) => a.ordre - b.ordre);
   return jsonOut_({ ok: true, items });
+}
+
+function getCatalogueOptionsSheet_() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName(CATALOGUE_OPTIONS_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(CATALOGUE_OPTIONS_TAB);
+    sheet.appendRow(CATOPTCOL_HEADERS);
+  }
+  return sheet;
+}
+
+/** Ajoute une option détaillée (avec flyer facultatif — lien Drive ou fichier uploadé) à une formule existante du catalogue. */
+function handleAdminAddCatalogueOption_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  const idFormule = clampStr_(data.idFormule, 60);
+  const label = clampStr_(data.option, 300);
+  if (!idFormule || !label) return jsonOut_({ ok: false, error: 'missing_field' });
+  const flyerUrl = resolveFlyerUrl_(data);
+
+  return withLock_(() => {
+    const sheet = getCatalogueOptionsSheet_();
+    const ordre = sheet.getLastRow();
+    sheet.appendRow([idFormule, label, flyerUrl, ordre]);
+    return jsonOut_({ ok: true });
+  });
+}
+
+function handleAdminDeleteCatalogueOption_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  return withLock_(() => {
+    const rowIndex = Number(data.rowIndex);
+    const sheet = getCatalogueOptionsSheet_();
+    if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) return jsonOut_({ ok: false, error: 'not_found' });
+    sheet.deleteRow(rowIndex);
+    return jsonOut_({ ok: true });
+  });
+}
+
+/** Liste complète (non filtrée) des options détaillées de toutes les formules, pour l'écran d'admin (avec rowIndex, nécessaire pour la suppression). */
+function handleAdminListCatalogueOptions_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  const values = getCatalogueOptionsSheet_().getDataRange().getValues();
+  const options = values.slice(1)
+    .map((r, idx) => ({
+      rowIndex: idx + 2,
+      idFormule: r[CATOPTCOL['ID formule']],
+      label: r[CATOPTCOL['Option']],
+      flyerUrl: r[CATOPTCOL['URL flyer']] || '',
+      ordre: Number(r[CATOPTCOL['Ordre']]) || 0,
+    }))
+    .filter(o => o.idFormule && o.label)
+    .sort((a, b) => a.ordre - b.ordre);
+  return jsonOut_({ ok: true, options });
 }
 
 /* ====== Paramètres (coordonnées de contact), gérés depuis l'admin ====== */

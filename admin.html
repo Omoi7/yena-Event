@@ -194,8 +194,9 @@
           <input type="text" id="catLien" placeholder="https://drive.google.com/file/d/.../view">
         </div>
         <div class="field">
-          <label for="catOptions">Options (une par ligne)</label>
+          <label for="catOptions">Options simples (une par ligne, sans flyer)</label>
           <textarea id="catOptions" rows="4" placeholder="Formule 2h&#10;Formule 4h&#10;Formule journée complète"></textarea>
+          <p class="field-hint field-hint-neutral">Pour des options avec un flyer à ouvrir, utilisez plutôt la section « Options avec flyer » ci-dessous une fois la formule enregistrée — dans ce cas, laissez ce champ vide.</p>
         </div>
         <div class="admin-newsletter-actions">
           <span id="catEditHint"></span>
@@ -206,6 +207,38 @@
         </div>
       </form>
       <div class="admin-catalogue-list" id="catalogueListAdmin"></div>
+
+      <div class="admin-panel-head" style="margin-top:36px;">
+        <h3>Options avec flyer</h3>
+      </div>
+      <p class="admin-newsletter-hint" style="margin-bottom:16px;">
+        Chaque option peut avoir son propre flyer explicatif (PDF ou image).
+        Quand un visiteur choisit cette option précise sur le site, le flyer
+        s'ouvre dans un nouvel onglet.
+      </p>
+      <form id="catOptionAddForm" class="admin-newsletter-form">
+        <div class="field">
+          <label for="catOptFormule">Formule concernée</label>
+          <select id="catOptFormule"></select>
+        </div>
+        <div class="field">
+          <label for="catOptLabel">Texte de l'option</label>
+          <input type="text" id="catOptLabel" placeholder="Ex : Formule 4h avec accessoires" required>
+        </div>
+        <div class="field">
+          <label for="catOptFlyerFile">Uploader le flyer (PDF ou image, 5 Mo max)</label>
+          <input type="file" id="catOptFlyerFile" accept="application/pdf,image/*">
+        </div>
+        <div class="field">
+          <label for="catOptFlyerLien">Ou lien Drive du flyer</label>
+          <input type="text" id="catOptFlyerLien" placeholder="https://drive.google.com/file/d/.../view">
+        </div>
+        <div class="admin-newsletter-actions">
+          <span></span>
+          <button type="submit" class="btn btn-primary" id="catOptAddBtn">Ajouter l'option</button>
+        </div>
+      </form>
+      <div class="admin-catalogue-list" id="catalogueOptionsListAdmin"></div>
     </div>
 
     <div class="admin-panel" id="adminPanel-carrousel" hidden>
