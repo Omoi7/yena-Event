@@ -118,11 +118,27 @@ em{font-style:italic; color:var(--gold);}
              linear-gradient(160deg, var(--brown-950), var(--brown) 55%, var(--brown-light));
 }
 .hero-bg{
-  position:absolute; inset:0; opacity:.15;
+  position:absolute; inset:0; opacity:.15; pointer-events:none;
   background-image:
     repeating-linear-gradient(45deg, rgba(251,247,239,.4) 0 2px, transparent 2px 40px),
     repeating-linear-gradient(-45deg, rgba(251,247,239,.25) 0 2px, transparent 2px 40px);
 }
+/* Carrousel photo/vidéo optionnel, géré depuis l'admin : reste invisible
+   (aucun espace pris) tant qu'aucun média n'est configuré ; le dégradé et le
+   motif existants deviennent un voile translucide par-dessus le média une
+   fois activés (classe .has-hero-media), pour garder le texte lisible. */
+.hero-carousel{position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none;}
+.hero-carousel-track{display:flex; width:100%; height:100%; transition:transform .7s ease;}
+.hero-slide{flex:0 0 100%; width:100%; height:100%; position:relative;}
+.hero-slide img, .hero-slide video, .hero-slide iframe{width:100%; height:100%; object-fit:cover; display:block; border:0;}
+.hero-carousel-dots{
+  position:absolute; bottom:96px; left:50%; transform:translateX(-50%);
+  display:flex; gap:8px; z-index:2; pointer-events:auto;
+}
+.hero-carousel-dots button{width:8px; height:8px; border-radius:50%; border:none; background:rgba(251,247,239,.4); cursor:pointer; padding:0;}
+.hero-carousel-dots button.active{background:var(--gold);}
+.hero.has-hero-media{background:linear-gradient(180deg, rgba(20,10,5,.55), rgba(20,10,5,.78));}
+.hero.has-hero-media .hero-bg{opacity:.08;}
 .hero-inner{position:relative; z-index:1; color:var(--cream); max-width:760px; padding-block:80px;}
 .hero .eyebrow{color:var(--beige); letter-spacing:2px; text-transform:uppercase; font-size:.8rem; font-weight:600; margin-bottom:18px;}
 .hero h1{color:var(--cream); margin-bottom:22px;}

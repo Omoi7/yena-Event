@@ -245,6 +245,17 @@ const SOCIALS_TAB = 'Réseaux sociaux';
 const SOCIALS_HEADERS = ['Nom', 'Lien', 'Ordre'];
 const SOCOL = SOCIALS_HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
 
+// Carrousel photo/vidéo en haut de la page d'accueil, géré depuis l'admin.
+// Type = "Image" ou "Vidéo". Pour une image, "URL média" est un lien Drive
+// (collé) ou un fichier uploadé (voir resolveImageUrl_). Pour une vidéo,
+// c'est un lien direct (lien de partage Drive, lien YouTube, ou URL de
+// fichier vidéo hébergé ailleurs) — pas d'upload direct de fichier vidéo, les
+// vidéos étant généralement trop volumineuses pour un envoi en base64 via
+// Apps Script.
+const HERO_TAB = 'Carrousel accueil';
+const HERO_HEADERS = ['Type', 'URL média', 'Légende', 'Ordre', 'Visible'];
+const HCOL = HERO_HEADERS.reduce((acc, name, i) => { acc[name] = i; return acc; }, {});
+
 // Nom de l'onglet des réservations, utilisé pour le retrouver de façon fiable
 // (voir getSheet_ ci-dessous) même si Yena réordonne les onglets du classeur.
 const RESERVATIONS_TAB = 'Réservations (site web)';
@@ -335,6 +346,16 @@ function getSocialsSheet_() {
   if (!sheet) {
     sheet = ss.insertSheet(SOCIALS_TAB);
     sheet.appendRow(SOCIALS_HEADERS);
+  }
+  return sheet;
+}
+
+function getHeroSheet_() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName(HERO_TAB);
+  if (!sheet) {
+    sheet = ss.insertSheet(HERO_TAB);
+    sheet.appendRow(HERO_HEADERS);
   }
   return sheet;
 }
@@ -433,6 +454,8 @@ function doPost(e) {
     if (data.type === 'adminUpdateSettings') return handleAdminUpdateSettings_(data);
     if (data.type === 'adminAddSocialLink') return handleAdminAddSocialLink_(data);
     if (data.type === 'adminDeleteSocialLink') return handleAdminDeleteSocialLink_(data);
+    if (data.type === 'adminAddHeroMedia') return handleAdminAddHeroMedia_(data);
+    if (data.type === 'adminDeleteHeroMedia') return handleAdminDeleteHeroMedia_(data);
     if (data.type === 'adminSetQuoteAmount') return handleAdminSetQuoteAmount_(data);
     if (data.type === 'adminMarkDepositPaid') return handleAdminMarkDepositPaid_(data);
     if (data.type === 'depositStatus') return handleDepositStatus_(data);
@@ -929,6 +952,54 @@ function handleAdminDeleteSocialLink_(data) {
   return withLock_(() => {
     const rowIndex = Number(data.rowIndex);
     const sheet = getSocialsSheet_();
+    if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) return jsonOut_({ ok: false, error: 'not_found' });
+    sheet.deleteRow(rowIndex);
+    return jsonOut_({ ok: true });
+  });
+}
+
+/* ====== Carrousel photo/vidéo de l'accueil, géré depuis l'admin ====== */
+
+/** Liste publique des médias du carrousel d'accueil (pas d'authentification requise, contenu non sensible). */
+function handleHeroPublic_() {
+  const values = getHeroSheet_().getDataRange().getValues();
+  const items = values.slice(1)
+    .map((r, idx) => ({
+      rowIndex: idx + 2,
+      type: r[HCOL['Type']],
+      url: r[HCOL['URL média']],
+      legende: r[HCOL['Légende']],
+      ordre: Number(r[HCOL['Ordre']]) || 0,
+      visible: String(r[HCOL['Visible']]).trim().toLowerCase() !== 'non',
+    }))
+    .filter(item => item.visible && item.url)
+    .sort((a, b) => a.ordre - b.ordre);
+  return jsonOut_({ ok: true, items });
+}
+
+/** Ajoute un média (image ou vidéo) au carrousel d'accueil. Image : lien Drive collé ou fichier uploadé. Vidéo : lien uniquement (Drive, YouTube, ou URL directe). */
+function handleAdminAddHeroMedia_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  const type = data.mediaType === 'Vidéo' ? 'Vidéo' : 'Image';
+  const legende = clampStr_(data.legende, 200);
+  const url = type === 'Vidéo' ? clampStr_(data.lien, 500) : resolveImageUrl_(data);
+  if (!url) return jsonOut_({ ok: false, error: 'missing_field' });
+
+  return withLock_(() => {
+    const sheet = getHeroSheet_();
+    const ordre = sheet.getLastRow();
+    sheet.appendRow([type, url, legende, ordre, 'Oui']);
+    return jsonOut_({ ok: true });
+  });
+}
+
+function handleAdminDeleteHeroMedia_(data) {
+  if (!isAdminAuthorized_(data)) return jsonOut_({ ok: false, error: 'unauthorized' });
+
+  return withLock_(() => {
+    const rowIndex = Number(data.rowIndex);
+    const sheet = getHeroSheet_();
     if (!rowIndex || rowIndex < 2 || rowIndex > sheet.getLastRow()) return jsonOut_({ ok: false, error: 'not_found' });
     sheet.deleteRow(rowIndex);
     return jsonOut_({ ok: true });
@@ -1606,6 +1677,7 @@ function doGet(e) {
     if (e.parameter.action === 'gallery') return handleGalleryPublic_();
     if (e.parameter.action === 'catalogue') return handleCataloguePublic_();
     if (e.parameter.action === 'settings') return handleSettingsPublic_();
+    if (e.parameter.action === 'heroCarousel') return handleHeroPublic_();
     if (e.parameter.action === 'googleReviews') return handleGoogleReviewsPublic_();
 
     const ref = (e.parameter.ref || '').trim();

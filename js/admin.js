@@ -66,7 +66,7 @@ let statutsReservation = ['Nouvelle demande', 'Devis envoyé', 'Confirmé', 'Ter
 let depositPercent = 0.30;
 
 /* ====== Onglets du tableau de bord ====== */
-const ADMIN_TABS = ['reservations', 'newsletter', 'galerie', 'catalogue', 'parametres'];
+const ADMIN_TABS = ['reservations', 'newsletter', 'galerie', 'catalogue', 'carrousel', 'parametres'];
 document.getElementById('adminTabBar').addEventListener('click', (e) => {
   const btn = e.target.closest('.admin-tab-btn');
   if (!btn) return;
@@ -95,6 +95,7 @@ function showDashboard_() {
   loadBookings_();
   loadGalleryAdmin_();
   loadCatalogueAdmin_();
+  loadHeroAdmin_();
   loadSettingsAdmin_();
 }
 
@@ -569,6 +570,95 @@ catalogueListAdmin.addEventListener('click', async (e) => {
   showToast('Formule supprimée.');
   exitCatalogueEditMode_();
   loadCatalogueAdmin_();
+});
+
+/* ====== Carrousel de l'accueil (photos/vidéos) ====== */
+const heroListAdmin = document.getElementById('heroListAdmin');
+const heroTypeSelect = document.getElementById('heroType');
+const heroFileField = document.getElementById('heroFileField');
+const heroLienLabel = document.getElementById('heroLienLabel');
+
+function updateHeroFormFields_() {
+  const isVideo = heroTypeSelect.value === 'Vidéo';
+  heroFileField.hidden = isVideo;
+  heroLienLabel.textContent = isVideo
+    ? 'Lien de la vidéo (Drive, YouTube, ou URL directe)'
+    : 'Ou lien de partage Drive de l\'image';
+}
+heroTypeSelect.addEventListener('change', updateHeroFormFields_);
+updateHeroFormFields_();
+
+async function loadHeroAdmin_() {
+  heroListAdmin.innerHTML = '<p class="admin-empty">Chargement…</p>';
+  const url = getApiUrl_();
+  if (!url) { heroListAdmin.innerHTML = ''; return; }
+  try {
+    const res = await fetch(`${url}?action=heroCarousel`);
+    const data = await res.json();
+    if (!data.ok || !data.items.length) {
+      heroListAdmin.innerHTML = '<p class="admin-empty">Aucun média pour le moment — le hero garde son fond habituel.</p>';
+      return;
+    }
+    heroListAdmin.innerHTML = data.items.map(item => `
+      <div class="admin-catalogue-item">
+        ${item.type === 'Image' ? `<img src="${escapeHtml_(item.url)}" alt="${escapeHtml_(item.legende || '')}" loading="lazy">` : ''}
+        <div class="admin-catalogue-item-body">
+          <h4>${item.type === 'Vidéo' ? '🎬' : '🖼️'} ${escapeHtml_(item.legende) || (item.type === 'Vidéo' ? 'Vidéo' : 'Image')}</h4>
+          ${item.type === 'Vidéo' ? `<p>${escapeHtml_(item.url)}</p>` : ''}
+        </div>
+        <button type="button" class="gal-delete" data-row="${item.rowIndex}" title="Supprimer">✕</button>
+      </div>
+    `).join('');
+  } catch (err) {
+    heroListAdmin.innerHTML = '<p class="admin-empty">Erreur de chargement.</p>';
+  }
+}
+
+document.getElementById('heroAddForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const type = heroTypeSelect.value;
+  const legende = document.getElementById('heroLegende').value.trim();
+  const lien = document.getElementById('heroLien').value.trim();
+  const file = type === 'Image' ? document.getElementById('heroFile').files[0] : null;
+
+  if (type === 'Vidéo' && !lien) { showToast('Indiquez un lien pour la vidéo.'); return; }
+  if (type === 'Image' && !lien && !file) { showToast('Indiquez un fichier ou un lien pour l\'image.'); return; }
+  if (file && file.size > MEDIA_MAX_IMAGE_BYTES) { showToast('Fichier trop lourd (5 Mo maximum).'); return; }
+
+  const btn = document.getElementById('heroAddBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Ajout…';
+
+  const payload = { type: 'adminAddHeroMedia', adminKey, mediaType: type, legende, lien };
+  if (type === 'Image' && !lien && file) {
+    payload.imageData = { name: file.name, mimeType: file.type || 'image/jpeg', data: await fileToBase64_(file) };
+  }
+  const result = await callApi_(payload);
+
+  btn.disabled = false;
+  btn.textContent = 'Ajouter au carrousel';
+
+  if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
+  if (!result.ok) { showToast("Erreur lors de l'ajout."); return; }
+
+  showToast('Média ajouté au carrousel !');
+  e.target.reset();
+  updateHeroFormFields_();
+  loadHeroAdmin_();
+});
+
+heroListAdmin.addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-row]');
+  if (!btn) return;
+  if (!confirm('Supprimer ce média du carrousel ?')) return;
+  btn.disabled = true;
+
+  const result = await callApi_({ type: 'adminDeleteHeroMedia', adminKey, rowIndex: Number(btn.dataset.row) });
+  if (result.error === 'unauthorized') { showLogin_('Session expirée, reconnectez-vous.'); return; }
+  if (!result.ok) { showToast('Erreur, réessayez.'); btn.disabled = false; return; }
+
+  showToast('Média supprimé.');
+  loadHeroAdmin_();
 });
 
 /* ====== Paramètres (coordonnées de contact + réseaux sociaux) ====== */

@@ -79,6 +79,7 @@
       <button type="button" class="admin-tab-btn" data-admin-tab="newsletter" role="tab" aria-selected="false">Newsletter</button>
       <button type="button" class="admin-tab-btn" data-admin-tab="galerie" role="tab" aria-selected="false">Galerie</button>
       <button type="button" class="admin-tab-btn" data-admin-tab="catalogue" role="tab" aria-selected="false">Catalogue</button>
+      <button type="button" class="admin-tab-btn" data-admin-tab="carrousel" role="tab" aria-selected="false">Carrousel accueil</button>
       <button type="button" class="admin-tab-btn" data-admin-tab="parametres" role="tab" aria-selected="false">Paramètres</button>
     </nav>
 
@@ -205,6 +206,45 @@
         </div>
       </form>
       <div class="admin-catalogue-list" id="catalogueListAdmin"></div>
+    </div>
+
+    <div class="admin-panel" id="adminPanel-carrousel" hidden>
+      <div class="admin-panel-head">
+        <h2>Carrousel de l'accueil</h2>
+      </div>
+      <p class="admin-newsletter-hint" style="margin-bottom:16px;">
+        Photos et vidéos affichées en fond défilant tout en haut de la page
+        d'accueil. Pour une image : uploadez un fichier ou collez un lien
+        Drive. Pour une vidéo : collez un lien (partage Drive, YouTube, ou
+        URL d'un fichier vidéo hébergé ailleurs) — pas d'upload direct de
+        vidéo, trop volumineux.
+      </p>
+      <form id="heroAddForm" class="admin-newsletter-form">
+        <div class="field">
+          <label for="heroType">Type de média</label>
+          <select id="heroType">
+            <option value="Image">Image</option>
+            <option value="Vidéo">Vidéo</option>
+          </select>
+        </div>
+        <div class="field" id="heroFileField">
+          <label for="heroFile">Uploader une image (5 Mo max)</label>
+          <input type="file" id="heroFile" accept="image/*">
+        </div>
+        <div class="field">
+          <label for="heroLien" id="heroLienLabel">Ou lien de partage Drive de l'image</label>
+          <input type="text" id="heroLien" placeholder="https://drive.google.com/file/d/.../view">
+        </div>
+        <div class="field">
+          <label for="heroLegende">Légende (facultatif, non affichée publiquement)</label>
+          <input type="text" id="heroLegende" placeholder="Ex : Mariage au domaine des Roses">
+        </div>
+        <div class="admin-newsletter-actions">
+          <span></span>
+          <button type="submit" class="btn btn-primary" id="heroAddBtn">Ajouter au carrousel</button>
+        </div>
+      </form>
+      <div class="admin-catalogue-list" id="heroListAdmin"></div>
     </div>
 
     <div class="admin-panel" id="adminPanel-parametres" hidden>

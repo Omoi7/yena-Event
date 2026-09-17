@@ -58,6 +58,102 @@ async function loadSettings_() {
 }
 loadSettings_();
 
+/* ====== Carrousel photo/vidéo de l'accueil (géré depuis l'admin) ====== */
+// Reste invisible (aucun espace pris, fond habituel du hero conservé) tant
+// qu'aucun média n'a été ajouté depuis l'admin.
+const heroSection = document.getElementById('accueil');
+const heroCarousel = document.getElementById('heroCarousel');
+const heroCarouselTrack = document.getElementById('heroCarouselTrack');
+const heroCarouselDots = document.getElementById('heroCarouselDots');
+const heroPrefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+let heroSlideIndex = 0;
+let heroSlidesCount = 0;
+let heroTimer = null;
+
+/** Convertit un lien de partage Drive en URL de prévisualisation intégrable (iframe), ou null si ce n'est pas un lien Drive reconnu. */
+function driveEmbedUrl_(link) {
+  const match = String(link).match(/\/d\/([-\w]{20,})/) || String(link).match(/[?&]id=([-\w]{20,})/);
+  return match ? `https://drive.google.com/file/d/${match[1]}/preview` : null;
+}
+/** Convertit un lien YouTube en URL d'intégration (iframe), ou null si ce n'est pas un lien YouTube reconnu. */
+function youTubeEmbedUrl_(link) {
+  const match = String(link).match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([\w-]{6,})/);
+  return match ? `https://www.youtube.com/embed/${match[1]}?rel=0` : null;
+}
+
+function goToHeroSlide_(i) {
+  if (!heroSlidesCount) return;
+  heroSlideIndex = (i + heroSlidesCount) % heroSlidesCount;
+  heroCarouselTrack.style.transform = `translateX(-${heroSlideIndex * 100}%)`;
+  heroCarouselDots.querySelectorAll('button').forEach((d, idx) => d.classList.toggle('active', idx === heroSlideIndex));
+  // Ne joue que la vidéo du slide actif (économie de bande passante, évite
+  // plusieurs sons/lectures simultanés) ; les slides image/iframe n'ont pas
+  // d'élément <video>, d'où la recherche par slide plutôt que par index brut.
+  heroCarouselTrack.querySelectorAll('.hero-slide').forEach((slideEl, idx) => {
+    const v = slideEl.querySelector('video');
+    if (!v) return;
+    if (idx === heroSlideIndex) v.play().catch(() => {}); else v.pause();
+  });
+}
+
+function startHeroAutoplay_() {
+  clearInterval(heroTimer);
+  if (heroPrefersReducedMotion || heroSlidesCount < 2) return;
+  heroTimer = setInterval(() => goToHeroSlide_(heroSlideIndex + 1), 6000);
+}
+function stopHeroAutoplay_() { clearInterval(heroTimer); }
+heroCarousel.addEventListener('mouseenter', stopHeroAutoplay_);
+heroCarousel.addEventListener('mouseleave', startHeroAutoplay_);
+
+function renderHeroCarousel_(items) {
+  heroCarouselTrack.innerHTML = '';
+  heroCarouselDots.innerHTML = '';
+  heroSlidesCount = items.length;
+  if (!heroSlidesCount) { heroSection.classList.remove('has-hero-media'); return; }
+
+  items.forEach((item, i) => {
+    const slide = document.createElement('div');
+    slide.className = 'hero-slide';
+    if (item.type === 'Vidéo') {
+      const driveEmbed = driveEmbedUrl_(item.url);
+      const ytEmbed = youTubeEmbedUrl_(item.url);
+      if (driveEmbed) {
+        slide.innerHTML = `<iframe src="${escapeHtml_(driveEmbed)}" allow="autoplay" loading="lazy" title="${escapeHtml_(item.legende || 'Vidéo Yena Event')}"></iframe>`;
+      } else if (ytEmbed) {
+        slide.innerHTML = `<iframe src="${escapeHtml_(ytEmbed)}" allow="autoplay; encrypted-media" loading="lazy" title="${escapeHtml_(item.legende || 'Vidéo Yena Event')}"></iframe>`;
+      } else {
+        slide.innerHTML = `<video muted loop playsinline controls preload="metadata"><source src="${escapeHtml_(item.url)}"></video>`;
+      }
+    } else {
+      slide.innerHTML = `<img src="${escapeHtml_(item.url)}" alt="${escapeHtml_(item.legende || '')}" loading="lazy">`;
+    }
+    heroCarouselTrack.appendChild(slide);
+
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.setAttribute('aria-label', `Média ${i + 1} sur ${items.length}`);
+    if (i === 0) dot.classList.add('active');
+    dot.addEventListener('click', () => { goToHeroSlide_(i); startHeroAutoplay_(); });
+    heroCarouselDots.appendChild(dot);
+  });
+
+  heroSection.classList.add('has-hero-media');
+  goToHeroSlide_(0);
+  startHeroAutoplay_();
+}
+
+async function loadHeroCarousel_() {
+  const url = window.YENA_CONFIG && window.YENA_CONFIG.APPS_SCRIPT_URL;
+  if (!url) return;
+  try {
+    const res = await fetch(`${url}?action=heroCarousel`);
+    const data = await res.json();
+    if (data.ok && data.items && data.items.length) renderHeroCarousel_(data.items);
+  } catch (err) { /* pas de carrousel configuré : le hero garde son fond habituel */ }
+}
+loadHeroCarousel_();
+
 /* ====== Header scroll ====== */
 const header = document.getElementById('siteHeader');
 
