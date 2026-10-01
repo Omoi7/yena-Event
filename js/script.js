@@ -2,6 +2,14 @@
 
 document.getElementById('year').textContent = new Date().getFullYear();
 
+const manageCookiesLink = document.getElementById('manageCookiesLink');
+if (manageCookiesLink) {
+  manageCookiesLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (window.yenaOpenCookieBanner) window.yenaOpenCookieBanner();
+  });
+}
+
 /** Échappe une valeur avant de l'insérer dans du HTML (innerHTML). */
 function escapeHtml_(value) {
   return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({

@@ -32,6 +32,7 @@ Site vitrine interactif pour l'agence évènementielle Yena Event (mariages, ann
 - Protection anti-spam (piège invisible + limite de fréquence) et anti-force-brute sur l'admin
 - Barre de progression de lecture, copie de référence en un clic, focus clavier accessible
 - Palette de marque : marron `#52311b` / beige `#e6d6bc`
+- **Conformité RGPD / SEO technique** : pages **Politique de confidentialité** (`confidentialite.html`) et **CGU/CGV** (`cgu.html`), **bandeau de consentement aux cookies** (aucune mesure d'audience chargée tant que l'utilisateur n'a pas cliqué « Tout accepter »), page **404 personnalisée**, `robots.txt` + `sitemap.xml`, balises **Open Graph/Twitter Card** (image de partage dédiée `assets/og-image.png`) et URL canonique, `admin.html` exclue de l'indexation (`noindex`), images compressées (logo, favicon, visuel de partage)
 
 ## Stack
 
@@ -257,6 +258,23 @@ automatiques, contact form silencieux côté Yena).
   bonne fiche en ajoutant la propriété de script `SERPAPI_DATA_ID`
   (identifiant SerpApi de la fiche exacte) — voir le commentaire au-dessus
   de `SERPAPI_BUSINESS_QUERY` dans `Code.gs` pour le détail.
+- **Outil d'analytics** : aucun outil de mesure d'audience n'est branché par
+  défaut (aucune donnée envoyée à un tiers tant que ce n'est pas configuré).
+  Pour activer Google Analytics 4, renseignez `GA_MEASUREMENT_ID` (format
+  `G-XXXXXXXXXX`, disponible dans Analytics > Administration > Flux de
+  données) dans `js/config.js`. Le script ne se charge que si un visiteur
+  clique sur « Tout accepter » dans le bandeau cookies.
+- **URL canonique / Open Graph** : les balises `<link rel="canonical">` et
+  `og:url` dans `index.html`, `confidentialite.html` et `cgu.html`, ainsi que
+  `robots.txt`/`sitemap.xml`, pointent vers
+  `https://omoi7.github.io/yena-Event/`. Si le site est un jour déplacé sur
+  un nom de domaine personnalisé, remplacez cette URL partout (et pensez à
+  activer « Enforce HTTPS » dans les réglages GitHub Pages pour ce domaine).
+- **Pages CGU et confidentialité** (`cgu.html`, `confidentialite.html`) :
+  rédigées à partir du fonctionnement réel du site (réservation, acompte
+  Stripe, stockage Google Sheets/Drive/Calendar, avis via SerpApi). Elles ne
+  remplacent pas une relecture par un professionnel du droit, en particulier
+  si Yena Event a un statut juridique (SIRET, etc.) à faire apparaître.
 
 ## Pistes envisagées mais non implémentées
 
