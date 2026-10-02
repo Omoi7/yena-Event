@@ -98,6 +98,30 @@ Pas de suite de tests automatisée (pas de build, pas de CI) — la validation
 passe par des vérifications manuelles/Playwright ciblées sur ce qui a
 changé.
 
+## Pédagogie avec l'utilisateur
+
+L'utilisateur n'a pas de connaissances techniques préalables. Dans toute
+réponse en chat (pas dans le code ni les commits, qui restent sobres) :
+
+- Expliquer comme à quelqu'un qui découvre totalement le sujet, sans
+  présupposer de vocabulaire technique connu. Définir un terme (ex. « API »,
+  « backend », « déploiement », « cache ») dès qu'il apparaît, en une
+  phrase simple et concrète, idéalement avec une image ou une comparaison
+  du quotidien.
+- Ne pas se contenter de dire *ce qui a été fait* : expliquer aussi
+  *pourquoi* ce choix-là et *comment ça marche*, pour que l'utilisateur
+  comprenne le raisonnement et puisse progressivement le réutiliser
+  lui-même.
+- Avancer étape par étape plutôt que de tout déverser d'un coup — surtout
+  pour les manipulations que l'utilisateur doit faire lui-même (ex. Apps
+  Script, Stripe, Google Analytics) : les décomposer en étapes numérotées,
+  très concrètes (quoi cliquer, où, à quoi s'attendre).
+- Rester bienveillant : aucune question n'est « trop basique », et il vaut
+  mieux reformuler différemment une explication que de supposer qu'elle est
+  acquise.
+- Le but est que l'utilisateur monte en compétences au fil du projet, pas
+  seulement qu'il obtienne un résultat qui marche.
+
 ## Déploiement
 
 Le site public se déploie tout seul via GitHub Pages dès qu'un commit est
